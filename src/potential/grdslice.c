@@ -13,17 +13,17 @@
  *
  *	Contact info: www.generic-mapping-tools.org
  *--------------------------------------------------------------------*/
-/* grdslice reads a grid and detects isolated peaks by using
- * slice contouring.  We only contour interior, closed contours.
- * We contour from maximum value and go downwards.  As the contour value
+/* grdslice reads a 2-D grid and detects isolated peaks by using
+ * slice contouring.  We only examine interior, closed contours.
+ * We contour from the maximum value and go downwards.  As the contour value
  * drops we will chop off the tops of smaller and smaller peaks.  The
  * first time we do this we initialize a new peak object and then the
- * contour rings further down are appended via pointers to the down slice.
+ * contour rings further down are appended via pointers to the initial slice.
  * As the contours widen it is possible that more than one peak share
  * the same, broader base slices.  We may then traverse the list of peak
  * and their slices to do analysis.  Each slice stores its area and mean
- * location.
- * The usual input grids will geographic lon/lat. However, we also accept
+ * location and fitted ellipsoidal parameters.
+ * The usual input grid will be geographic lon/lat. However, we also accept
  * Mercator grids or Cartesian.  The analysis will be done using projected
  * Mercator (or original Cartesian) units but the results will be reported
  * in geographic (if input is geographic or Mercator).
@@ -181,34 +181,34 @@ static int parse (struct GMT_CTRL *GMT, struct GRDSLICE_CTRL *Ctrl, struct GMT_O
 
 			/* Processes program-specific parameters */
 
-			case 'A':
+			case 'A':	/* Ignore small peaks too close to larger peaks */
 				Ctrl->A.active = true;
 				Ctrl->A.cutoff = atof (opt->arg);
 				break;
-			case 'C':
+			case 'C':	/* Contour slice interval */
 				Ctrl->C.active = true;
 				Ctrl->C.interval = atof (opt->arg);
 				break;
-			case 'D':
+			case 'D':	/* File prefix */
 				Ctrl->D.active = true;
 				gmt_M_str_free (Ctrl->D.file);
 				Ctrl->D.file = strdup (opt->arg);
 				break;
-			case 'L':
+			case 'L':	/* Limit the contour range */
 				Ctrl->L.active = true;
 				sscanf (opt->arg, "%lf/%lf", &Ctrl->L.low, &Ctrl->L.high);
 				break;
-			case 'S':
+			case 'S':	/* Smooth the contours */
 				Ctrl->S.active = true;
 				j = atoi (opt->arg);
 				n_errors += gmt_M_check_condition (GMT, j < 0, "Option -S: Smooth_factor must be > 0\n");
 				Ctrl->S.value = j;
 				break;
-			case 'T':
+			case 'T':	/* Write base and index files */
 				Ctrl->T.active = true;
 				sscanf (opt->arg, "%lf/%lf", &Ctrl->T.blevel, &Ctrl->T.acutoff);
 				break;
-			case 'Z':
+			case 'Z':	/* Sake/offset grid before analysis */
 				Ctrl->Z.active = true;
 				while (gmt_getmodopt (GMT, 'Z', opt->arg, "so", &pos, p, &n_errors) && n_errors == 0) {
 					switch (p[0]) {
@@ -228,7 +228,7 @@ static int parse (struct GMT_CTRL *GMT, struct GRDSLICE_CTRL *Ctrl, struct GMT_O
 	n_errors += gmt_M_check_condition (GMT, n_files != 1 || Ctrl->In.file == NULL, "Must specify a single grid file\n");
 	n_errors += gmt_M_check_condition (GMT, Ctrl->C.interval <= 0.0, "Option -C: Must specify positive contour interval\n");
 	n_errors += gmt_M_check_condition (GMT, Ctrl->L.low > Ctrl->L.high, "Option -L: lower limit > upper!\n");
-	n_errors += gmt_M_check_condition (GMT, Ctrl->T.active && Ctrl->T.blevel < Ctrl->L.low, "Option -T: Bottom level < lower limit!\n");
+	n_errors += gmt_M_check_condition (GMT, Ctrl->T.active && Ctrl->T.blevel < Ctrl->L.low, "Option -T: Bottom level < lower limit set in -L!\n");
 	n_errors += gmt_M_check_condition (GMT, Ctrl->Z.scale == 0.0, "Option -Z: factor must be nonzero\n");
 
 	return (n_errors ? GMT_PARSE_ERROR : GMT_NOERROR);
@@ -249,7 +249,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	int64_t ns;
 
 	char file[PATH_MAX] = {""}, bfile[PATH_MAX] = {""}, kfile[PATH_MAX] = {""};
-	
+
 	FILE *fp = NULL, *tp = NULL, *kp = NULL;
 
 	double aspect, cval, min, max, small, scale = 1.0, minor, major, sa, ca, sin_a, cos_a, area, dr, a, pos[2];
@@ -281,13 +281,13 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	if ((error = parse (GMT, Ctrl, options)) != GMT_NOERROR) Return (error);
 
 	/*---------------------------- This is the grdslice main code ----------------------------*/
-	
-	GMT_Report (API, GMT_MSG_INFORMATION, "Allocate memory and read data file\n");
 
 	if (!strcmp (Ctrl->In.file,  "=")) {
 		GMT_Report (API, GMT_MSG_ERROR, "Piping of grids not supported!\n");
 		Return (EXIT_FAILURE);
 	}
+
+	GMT_Report (API, GMT_MSG_INFORMATION, "Allocate memory and read data file\n");
 
 	gmt_M_memcpy (wesn, GMT->common.R.wesn, 4, double);	/* Current -R setting, if any (else it is 0/0/0/0 and ignored) */
 
@@ -297,32 +297,32 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 	if (gmt_M_is_subset (GMT, G->header, wesn)) {	/* Subset requested; make sure wesn matches header spacing since may have rough edges */
 		if ((error = gmt_M_err_fail (GMT, gmt_adjust_loose_wesn (GMT, wesn, G->header), "")))
-			Return (error);
+			Return (GMT_RUNTIME_ERROR);
 	}
 
 	/* Read in the grid, subset or not */
 	if (GMT_Read_Data (API, GMT_IS_GRID, GMT_IS_FILE, GMT_IS_SURFACE, GMT_DATA_ONLY, wesn, Ctrl->In.file, G) == NULL) {
-		Return (API->error);	/* Get subset */
+		Return (API->error);
 	}
 
-	/* Set up a plain Mercator projection on a spherical Earth with -Jm1i -R0/360/-lat/+lat */
-	GMT->current.setting.proj_ellipsoid = gmt_get_ellipsoid (GMT, "Sphere");
-	GMT->current.proj.units_pr_degree = true;
-	GMT->current.proj.pars[0] = 180.0;
-	GMT->current.proj.pars[1] = 0.0;
-	GMT->current.proj.pars[2] = 1.0;
-	GMT->current.proj.projection = GMT->current.proj.projection_GMT = GMT_MERCATOR;
-	GMT->common.J.active = true;
+	if (gmt_M_is_geographic (GMT, GMT_IN)) geo = 1;	/* Geo means input grid is in geographic degrees */
+	is_mercator = (strstr (G->header->remark, "Spherical Mercator Projected with -Jm1") != NULL);	/* Do we detect a Mercator grid */
 
-	if (gmt_map_setup (GMT, wesn_m)) Return (GMT_PROJECTION_ERROR);
+	if (is_mercator || geo) {
+		/* Set up a plain Mercator projection on a spherical Earth with -Jm1i -R0/360/-lat/+lat, unless Cartesian */
+		GMT->current.setting.proj_ellipsoid = gmt_get_ellipsoid (GMT, "Sphere");
+		GMT->current.proj.units_pr_degree = true;
+		GMT->current.proj.pars[0] = 180.0;
+		GMT->current.proj.pars[1] = 0.0;
+		GMT->current.proj.pars[2] = 1.0;
+		GMT->current.proj.projection = GMT->current.proj.projection_GMT = GMT_MERCATOR;
+		GMT->common.J.active = true;
 
-	if (strstr (G->header->remark, "Spherical Mercator Projected with -Jm1")) {
-		/* Grid coordinates are already in spherical Mercator units */
-		gmt_geo_to_xy (GMT, 0.0, 0.0, &merc_x0, &merc_y0);
-		is_mercator = true;
+		if (gmt_map_setup (GMT, wesn_m)) Return (GMT_PROJECTION_ERROR);
+
+		if (is_mercator)	/* Get Mercator coordinates of our origin at (0,0) */
+			gmt_geo_to_xy (GMT, 0.0, 0.0, &merc_x0, &merc_y0);
 	}
-	
-	if (gmt_M_is_geographic (GMT, GMT_IN)) geo = 1;	/* Geo means input is geographic degrees */
 
 	if (!(Ctrl->Z.scale == 1.0 && Ctrl->Z.offset == 0.0)) {	/* Must transform z grid */
 		GMT_Report (API, GMT_MSG_INFORMATION, "Subtracting %g and multiplying grid by %g\n", Ctrl->Z.offset, Ctrl->Z.scale);
@@ -345,7 +345,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	contour = gmt_M_memory (GMT, NULL, n_alloc, double);
 
 	/* Set up contour intervals automatically from Ctrl->C.interval */
-	
+
 	min = floor (G->header->z_min / Ctrl->C.interval) * Ctrl->C.interval; if (min < G->header->z_min) min += Ctrl->C.interval;
 	max = ceil  (G->header->z_max / Ctrl->C.interval) * Ctrl->C.interval; if (max > G->header->z_max) max -= Ctrl->C.interval;
 	for (cs = irint (min/Ctrl->C.interval), n_contours = 0; cs <= irint (max/Ctrl->C.interval); cs++, n_contours++) {
@@ -359,7 +359,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 	/* Because we are doing single-precision, we cannot subtract incrementally but must start with the
 	 * original grid values and subtract the current contour value. */
-	 
+
 	if ((G_orig = GMT_Duplicate_Data (API, GMT_IS_GRID, GMT_DUPLICATE_DATA, G)) == NULL) {
 		gmt_M_free (GMT, contour);
 		Return (GMT_RUNTIME_ERROR);
@@ -509,7 +509,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 			/* Determine if any previous (higher) level contours are inside the new (lower) contour */
 			
-			n_inside = 0;			/* Not inside anything so far */
+			n_inside = 0;	/* Not inside anything so far */
 			if (c < (n_contours-1) && slice[c+1]) {	/* There is a previous contour level and it has contours - must check for nesting */
 				poly = slice[c+1];		/* First contour polygon for the previous contour level */
 				while (poly) {			/* As long as there are more polygons */
@@ -526,7 +526,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 						n_inside++;
 					}
 
-					poly = poly->next;			/* Go to next polygon in the list of contours at the previous level */
+					poly = poly->next;	/* Go to next polygon in the list of contours at the previous level */
 				}
 			}
 			if (n_inside == 0) {	/* No previous contours contained by this contour - initialize a new peak location at the center of this slice */
@@ -547,7 +547,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		}
 		GMT_Report (API, GMT_MSG_INFORMATION, "Tracing the %8.2f contour: # of slices: %6d # of peaks: %6d\n", cval, n_slices, n_peaks);
 	}
-	if (geo) is_mercator = true;	/* Since all coordinates have been converted by now */
+	if (is_mercator) geo = 1;	/* Since all coordinates have been converted by now */
 
 	peak = gmt_M_memory (GMT, peak, n_peaks, struct GRDSLICE_PEAK *);
 
@@ -557,7 +557,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		skip = gmt_M_memory (GMT, NULL, n_peaks, bool);
 		for (c = 0; c < n_peaks; c++) {	/* For each peak */
 			for (i = c+1; i < n_peaks; i++) {	/* For each other peak */
-				if (is_mercator)
+				if (geo)
 					dist = 0.001 * gmt_great_circle_dist_meter (GMT, peak[c]->start->x_mean, peak[c]->start->y_mean, peak[i]->start->x_mean, peak[i]->start->y_mean);
 				else 	/* Cartesian */
 					dist = hypot (peak[c]->start->x_mean - peak[c]->start->y_mean, peak[i]->start->x_mean - peak[i]->start->y_mean);
@@ -568,8 +568,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			}
 		}
 	}
-	
-	if (is_mercator) gmt_set_geographic (GMT, GMT_OUT);	/* We wish to write geographic coordinates */
+
+	if (geo) gmt_set_geographic (GMT, GMT_OUT);	/* We wish to write geographic coordinates */
 
 	sprintf (file, "%s_pos.txt", Ctrl->D.file);
 	if ((fp = fopen (file, "w")) == NULL) {
@@ -594,13 +594,13 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		gmt_M_free (GMT, peak[c]);		/* Free memory as we go */
 	}
 	fclose (fp);
-	
+
 	sprintf (file, "%s_slices.txt", Ctrl->D.file);
 	if ((fp = fopen (file, "w")) == NULL) {
 		GMT_Report (API, GMT_MSG_ERROR, "Unable to create file %s\n", file);
 		Return (EXIT_FAILURE);
 	}
-	
+
 	if (Ctrl->T.active) {
 		sprintf (bfile, "%s_bottom.txt", Ctrl->D.file);
 		if ((tp = fopen (bfile, "w")) == NULL) {
@@ -613,13 +613,12 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			Return (EXIT_FAILURE);
 		}
 	}
-	
+
 	for (c = 0; c < n_contours; c++) {	/* For each contour value cval */
 		poly = slice[c];		/* First contour polygon at this contour level */
 		while (poly) {			/* As long as there are more polygons at this level */
 			/* Output a multisegment header and body */
 			out[0] = poly->x_mean;	out[1] = poly->y_mean;
-			if (is_mercator) gmt_xy_to_geo (GMT, &out[0], &out[1], out[0] + merc_x0, out[1] + merc_y0);	/* Get lon, lat */
 			fprintf (fp, "> -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g\n", poly->area, poly->z, poly->shared, out[0], out[1], poly->azimuth, poly->major, poly->minor, poly->fit);
 			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.blevel) && poly->area >= Ctrl->T.acutoff) {
 				kp_id++;
@@ -627,13 +626,13 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				/* indices file format: lon lat x y id */
 				fprintf (kp, "%g\t%g\t%g\t%g\t%d\n", out[0], out[1], poly->x_mean, poly->y_mean, kp_id);
 			}
-			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.blevel) && poly->area >= Ctrl->T.acutoff) {
-				/* Write out the polygon perimeters */
-				for (i = 0; i < poly->n; i++) {
-					out[0] = poly->x[i];	out[1] = poly->y[i];	out[2] = poly->z;
-					if (is_mercator) gmt_xy_to_geo (GMT, &out[0], &out[1], out[0] + merc_x0, out[1] + merc_y0);	/* Get lon, lat */
-					GMT->current.io.output (GMT, fp, 3, out, NULL);
-				}
+			/* Write out the polygon perimeters */
+			for (i = 0; i < poly->n; i++) {
+				out[0] = poly->x[i];	out[1] = poly->y[i];	out[2] = poly->z;
+				if (is_mercator) gmt_xy_to_geo (GMT, &out[0], &out[1], out[0] + merc_x0, out[1] + merc_y0);	/* Get lon, lat */
+				GMT->current.io.output (GMT, fp, 3, out, NULL);
+				if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.blevel) && poly->area >= Ctrl->T.acutoff)
+					GMT->current.io.output (GMT, tp, 3, out, NULL);
 			}
 			this_slice = poly;
 			poly = poly->next;		/* Go to next polygon in this contour list */
