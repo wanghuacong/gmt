@@ -421,6 +421,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			area = gmt_centroid_area (GMT, x, y, n, geo, pos);
 			if (area > 0.0)	/* Enforce CCW polygons only */
 				grdslice_reverse_polygon (x, y, n);
+			else
+				area = fabs (area);
 
 			/* Below we want all coordinates to be projected Mercator (or the original Cartesian) except x_mean/y_mean which will be in degrees (unless Cartesian) */
 
@@ -452,7 +454,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				if (y[i] > this_slice->ymax) this_slice->ymax = this_slice->y[i];
 			}
 
-			this_slice->area = fabs (area) * (scale * scale);	/* Now in km^2 unless for Cartesian grids */
+			this_slice->area = area * (scale * scale);	/* Now in km^2 unless for Cartesian grids */
 
 			GMT_Report (API, GMT_MSG_DEBUG, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
 			
