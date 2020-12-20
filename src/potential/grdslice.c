@@ -636,9 +636,9 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			if (dump) {	/* indices file format: lon lat x y id */
 				kp_id++;
 				if (geo)
-					gmt_geo_to_xy (GMT, this_slice->x_mean, this_slice->y_mean, &out[2], &out[3]);
+					gmt_geo_to_xy (GMT, poly->x_mean, poly->y_mean, &out[2], &out[3]);
 				else
-					out[2] = this_slice->x_mean, out[3] = this_slice->y_mean;
+					out[2] = poly->x_mean, out[3] = poly->y_mean;
 				fprintf (tp, "> %d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g\n", kp_id, poly->area, poly->z, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
 				fprintf (kp, "%g\t%g\t%g\t%g\t%d\n", out[GMT_X], out[GMT_Y], out[2], out[3], kp_id);
 			}
