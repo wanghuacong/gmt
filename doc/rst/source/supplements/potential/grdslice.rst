@@ -65,7 +65,7 @@ Optional Arguments
 .. _-D:
 
 **-D**\ *prefix*
-    Set the filename *prefix* for the two output files (*prefix*\ _slices.txt and *prefix*\ _pos.txt) [PEAK].
+    Set the filename *prefix* for the two output files (*prefix*\ _slices.txt and *prefix*\ _centers.txt) [PEAK].
 
 .. _-L:
 
@@ -84,7 +84,7 @@ Optional Arguments
     to ignore contours whose areas are less than *area* in km^2 (or user units
     for Cartesian grids). Use the **+b** modifier to select the *base* level for
     detecting a peak [Default uses all, but see **-L**].
-    If **-D** is also set then we will write two additional files called *prefix*\ _bottom.txt and
+    If **-D** is also set then we will write two additional files called *prefix*\ _bases.txt and
     *prefix*\ _indices.txt files as well. **Note**: If **-L** is used, the *bottom* must be equal or
     larger than the *low* value.
 

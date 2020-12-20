@@ -146,7 +146,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	GMT_Message (API, GMT_TIME_NONE, "\t-C Set the contour slice interval.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\n\tOPTIONS:\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-A Skip peaks that are within <cutoff> km from a larger peak [no skipping].\n");
-	GMT_Message (API, GMT_TIME_NONE, "\t-D Set filename prefix for output files (<prefix>_slices.txt and <prefix>_pos.txt) [peak].\n");
+	GMT_Message (API, GMT_TIME_NONE, "\t-D Set filename prefix for output files (<prefix>_slices.txt and <prefix>_centers.txt) [peak].\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-L Limit contours to this range [Default is -L0/inf].\n");
 	GMT_Option (API, "R");
 	GMT_Message (API, GMT_TIME_NONE, "\t-S Smooth contours by interpolation at approximately gridsize/<smooth> intervals.\n");
@@ -379,8 +379,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	peak  = gmt_M_memory (GMT, NULL, n_alloc,    struct GRDSLICE_PEAK *);
 
 	/* Allocate edge array for contouring */
-	n_edges = G->header->n_rows * (urint (ceil (G->header->n_columns / 16.0)));
-	edge = gmt_M_memory (GMT, NULL, n_edges, unsigned int);	/* Bit flags used to keep track of contours */
+	edge = gmt_contour_edge_init (GMT, G->header, &n_edges);
 
 	for (cs = (int)(n_contours-1); cs >= 0; cs--) {	/* For each contour value cval but starting from the top instead of base */
 		c = (unsigned int)cs;
@@ -582,7 +581,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 	if (geo) gmt_set_geographic (GMT, GMT_OUT);	/* We wish to write geographic coordinates */
 
-	sprintf (file, "%s_pos.txt", Ctrl->D.file);
+	sprintf (file, "%s_centers.txt", Ctrl->D.file);
 	if ((fp = fopen (file, "w")) == NULL) {
 		GMT_Report (API, GMT_MSG_ERROR, "Unable to create file %s\n", file);
 		Return (EXIT_FAILURE);
@@ -679,7 +678,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	gmt_M_free (GMT, peak);
 
 	GMT_Report (API, GMT_MSG_INFORMATION, "Done, min/max areas: %g %g\n", min_area, max_area);
-	GMT_Report (API, GMT_MSG_INFORMATION, "Data written to %s_slices.txt and %s_pos.txt\n", Ctrl->D.file, Ctrl->D.file);
+	GMT_Report (API, GMT_MSG_INFORMATION, "Data written to %s_slices.txt and %s_centers.txt\n", Ctrl->D.file, Ctrl->D.file);
 
 	Return (GMT_NOERROR);
 }
