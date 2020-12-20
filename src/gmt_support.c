@@ -16326,23 +16326,23 @@ GMT_LOCAL void gmtsupport_cart_centroid (const double *x, const double *y, uint6
 }
 
 GMT_LOCAL double gmtsupport_cart_centroid_area (struct GMT_CTRL *GMT, const double *x, const double *y, uint64_t n, double *centroid) {
-	double area, *xp = NULL, *yp = NULL;
+	double area, *xp = NULL, *yp = NULL, M[2];
 	uint64_t i;
 
 	if (n < 4) return 0.0;	/* Triangle is smallest polygon */
-	gmtsupport_cart_centroid (x, y, n, centroid);
+	gmtsupport_cart_centroid (x, y, n, M);
 
 	n--;	/* Since last point repeats the first */
 
 	xp = gmt_M_memory (GMT, NULL, n, double);	yp = gmt_M_memory (GMT, NULL, n, double);
 	for (i = 0; i < n; i++) {	/* Just take out centroid coordinates */
-		xp[i] = x[i] - centroid[GMT_X];
-		yp[i] = y[i] - centroid[GMT_Y];
+		xp[i] = x[i] - M[GMT_X];
+		yp[i] = y[i] - M[GMT_Y];
 	}
 	area = gmt_pol_area (xp, yp, n);	/* Signed area */
 	gmt_M_free (GMT, xp);
 	gmt_M_free (GMT, yp);
-
+	if (centroid) gmt_M_memcpy (centroid, M, 2U, double);
 	return (area);
 }
 

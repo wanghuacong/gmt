@@ -395,7 +395,7 @@ GMT_LOCAL int gmtsph_orientation (struct GMT_CTRL *GMT, double A[], double B[], 
 
 double gmtlib_geo_centroid_area (struct GMT_CTRL *GMT, double *lon, double *lat, uint64_t n, double *centroid) {
 	/* Based on ideas in http://www.jennessent.com/downloads/Graphics_Shapes_Online.pdf and Renka's area_ function.
-	 * Compute area of a spherical polygon and its centroid. */
+	 * Compute area of a spherical polygon and its centroid [unless centroid == NULL] */
 	unsigned int k, kind;
 	int sgn;
 	uint64_t p;
@@ -416,8 +416,10 @@ double gmtlib_geo_centroid_area (struct GMT_CTRL *GMT, double *lon, double *lat,
 		}
 		for (k = 0; k < 3; k++) C[k] = N[k] + P0[k] + P1[k];
 		gmt_normalize3v (GMT, C);
-		gmt_cart_to_geo (GMT, &clat, &centroid[GMT_X], C, true);
-		centroid[GMT_Y] = gmt_lat_swap (GMT, clat, GMT_LATSWAP_G2O+1);	/* Get geodetic latitude */
+		if (centroid) {
+			gmt_cart_to_geo (GMT, &clat, &centroid[GMT_X], C, true);
+			centroid[GMT_Y] = gmt_lat_swap (GMT, clat, GMT_LATSWAP_G2O+1);	/* Get geodetic latitude */
+		}
 		return (sgn * pol_area * GMT->current.proj.mean_radius * GMT->current.proj.mean_radius * 1.0e-6);	/* Signed area in km^2 */
 	}
 
@@ -455,7 +457,9 @@ double gmtlib_geo_centroid_area (struct GMT_CTRL *GMT, double *lon, double *lat,
 	}
 	for (k = 0; k < 3; k++) C[k] /= pol_area;	/* Get raw centroid */
 	gmt_normalize3v (GMT, C);
-	gmt_cart_to_geo (GMT, &clat, &centroid[GMT_X], C, true);
-	centroid[GMT_Y] = gmt_lat_swap (GMT, clat, GMT_LATSWAP_G2O+1);	/* Get geodetic latitude */
+	if (centroid) {
+		gmt_cart_to_geo (GMT, &clat, &centroid[GMT_X], C, true);
+		centroid[GMT_Y] = gmt_lat_swap (GMT, clat, GMT_LATSWAP_G2O+1);	/* Get geodetic latitude */
+	}
 	return (pol_area * GMT->current.proj.mean_radius * GMT->current.proj.mean_radius * 1.0e-6);	/* Signed area in km^2 */
 }
