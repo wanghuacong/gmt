@@ -15,11 +15,14 @@ Synopsis
 **gmt grdslice**
 *grid*
 |-C|\ *interval*
-[ |-A| ]
-[ |-D|\ [*prefix*] ]
+[ |-A|\ [*area*] ]
+[ |-D|\ [*distance*] ]
+[ |-E|\ [*slicefile*] ]
+[ |-F|\ [*foundationfile*] ]
+[ |-I|\ [*indexfile*] ]
 [ |-L|\ *low/high* ]
 [ |-S|\ *smoothfactor* ]
-[ |-T|\ [**+a**\ *area* ][**+b**\ *base*] ]
+[ |-T|\ *foundation* ]
 [ |SYN_OPT-V| ]
 [ |-Z|\ [**+s**\ *factor*][**+o**\ *shift*] ]
 [ |SYN_OPT-f| ]
@@ -36,7 +39,8 @@ starting from the max grid value and moving down to lower and lower values.  As 
 first encountered, their centers are considered the location of a new peak, and we trace the hierarchy of how
 each new slice belongs to groups of previously detected peaks by virtue of enclosing them.  Slice shapes
 are equated to ellipses and their best-fitting major and major axes and orientations are computed.
-Information are written to separate data files.
+Information are written to separate data files, as requested.  The primary output (to stdout) is a table
+with the vertical traces of peak centers.
 
 Required Arguments
 ------------------
@@ -50,7 +54,7 @@ Required Arguments
 .. _-C:
 
 **-C**\ *interval*
-    Constasnt contour *interval* for slicing.  The smaller the interval, the more detailed the results
+    Constant contour *interval* for slicing.  The smaller the interval, the more detailed the results
     and the longer the execution time.
 
 Optional Arguments
@@ -58,14 +62,30 @@ Optional Arguments
 
 .. _-A:
 
-**-A**
-    Examine the peak locations found and eliminate those that fall within *cutoff* km of another
-    peak with a larger amplitude [retain all peaks].
+**-A**\ *area*
+    Ignore contours whose areas are less than *area* in km^2 (or user units
+    for Cartesian grids) [retain all contours].
 
 .. _-D:
 
-**-D**\ *prefix*
-    Set the filename *prefix* for the two output files (*prefix*\ _slices.txt and *prefix*\ _centers.txt) [PEAK].
+**-D**\ *distance*
+    Examine the peak locations found and eliminate those that fall within *distance* km of another
+    peak with a larger amplitude [retain all peaks].
+
+.. _-E:
+
+**-E**\ *slicefile*
+    Set the filename for the output of all slice polygons [no slice output].
+
+.. _-F:
+
+**-F**\ *foundationfile*
+    Set the filename for the output of all peak foundation polygons [no foundation output].
+
+.. _-I:
+
+**-I**\ *indexfile*
+    Set the filename for the output of all peak indices [no index output].
 
 .. _-L:
 
@@ -79,14 +99,9 @@ Optional Arguments
 
 .. _-T:
 
-**-T**\ [**+a**\ *area* ][**+b**\ *base*]
-    Specify one or two different settings, as discussed:  Use the **+a** modifier
-    to ignore contours whose areas are less than *area* in km^2 (or user units
-    for Cartesian grids). Use the **+b** modifier to select the *base* level for
-    detecting a peak [Default uses all, but see **-L**].
-    If **-D** is also set then we will write two additional files called *prefix*\ _bases.txt and
-    *prefix*\ _indices.txt files as well. **Note**: If **-L** is used, the *bottom* must be equal or
-    larger than the *low* value.
+**-T**\ *foundation*
+    Select the *foundation* contour level for detecting a peak [Default uses all, but see **-L**].
+    **Note**: If **-L** is used, the *foundation* must be equal or larger than the *low* value.
 
 .. _-Z:
 
@@ -108,9 +123,9 @@ Optional Arguments
 Examples
 --------
 
-To slice the grid gravity_smts.grd every 0.1 mGal and write results to files called X_*, try::
+To slice the grid gravity_smts.grd every 0.1 mGal and write all results, try::
 
-    grdslice gravity_smts.grd -C0.1 -DX -V
+    grdslice gravity_smts.grd -C0.1 -Dindeces.txt -Eslices.txt -Ffoundations.txt -V > centers.txt
 
 References
 ----------
