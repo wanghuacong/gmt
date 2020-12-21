@@ -665,6 +665,18 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	else
 		GMT_Report (API, GMT_MSG_INFORMATION, "%d centers written to stdout\n", seg);
 
+	/* Count slices and indices/foundations */
+	for (c = n_slices = n_foundations = 0; c < n_contours; c++) {	/* For each peak */
+		poly = slice[c];		/* First contour polygon at this contour level */
+		np[c] = 0;	/* Number of slices per peak */
+		while (poly) {			/* As long as there are more polygons at this level */
+			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) n_foundations++;
+			np[c]++;
+			poly = poly->next;	/* Go to next polygon in this contour list */
+		}
+		n_slices += np[c];		/* Total number of slices found so far */
+	}
+
 	if (n_foundations == 0) {	/* Found nothing to write home about */
 		if (Ctrl->F.active)
 			GMT_Report (API, GMT_MSG_WARNING, "Option -F: No peak foundations detected despite -T being set\n");
@@ -672,6 +684,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			GMT_Report (API, GMT_MSG_WARNING, "Option -I: No peak indices detected despite -T being set\n");
 		Ctrl->F.active = Ctrl->I.active = false;	/* To prevent any attempt to write nothing below */
 	}
+	else
+		GMT_Report (API, GMT_MSG_INFORMATION, "Indices/Foundations: %d\n", n_foundations);
 
 	/* Optional outputs, if any */
 
