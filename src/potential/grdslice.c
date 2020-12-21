@@ -210,7 +210,7 @@ static int parse (struct GMT_CTRL *GMT, struct GRDSLICE_CTRL *Ctrl, struct GMT_O
 				while (gmt_getmodopt (GMT, 'T', opt->arg, "ab", &pos, p, &n_errors) && n_errors == 0) {
 					switch (p[0]) {
 						case 'a':	Ctrl->T.acutoff  = atof (&p[1]);	break;
-						case 'b':	Ctrl->T.blevel = atof (&p[1]);	break;
+						case 'b':	Ctrl->T.blevel   = atof (&p[1]);	break;
 						default: 	/* These are caught in gmt_getmodopt so break is just for Coverity */
 							break;
 					}
@@ -569,11 +569,11 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		skip = gmt_M_memory (GMT, NULL, n_peaks, bool);
 		for (c = 0; c < n_peaks; c++) {	/* For each peak */
 			for (i = c+1; i < n_peaks; i++) {	/* For each other peak */
-				if (geo)
+				if (geo)	/* Compute distances between peaks in km */
 					dist = 0.001 * gmt_great_circle_dist_meter (GMT, peak[c]->start->x_mean, peak[c]->start->y_mean, peak[i]->start->x_mean, peak[i]->start->y_mean);
-				else 	/* Cartesian */
+				else 	/* Cartesian distances */
 					dist = hypot (peak[c]->start->x_mean - peak[c]->start->y_mean, peak[i]->start->x_mean - peak[i]->start->y_mean);
-				if (dist < Ctrl->A.cutoff) {	/* These two peaks are too close */
+				if (dist < Ctrl->A.cutoff) {	/* These two peaks are too close, eliminate the smaller one */
 					which = (peak[c]->start->z >= peak[i]->start->z) ? i : c;
 					skip[which] = true;
 				}
@@ -589,9 +589,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		Return (EXIT_FAILURE);
 	}
 	for (c = n_skipped = 0; c < n_peaks; c++) {	/* For each peak */
-		if (Ctrl->A.active && skip[c]) {
+		if (Ctrl->A.active && skip[c])	/* SKip this peak as too small and too close to a bigger one */
 			n_skipped++;
-		}
 		else {
 			fprintf (fp, "> -Z%g -L%d x y z id area major minor azimuth fit \n", peak[c]->z, peak[c]->id);
 			poly = peak[c]->start;		/* First contour polygon originating form this peak */
@@ -607,6 +606,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	}
 	if (Ctrl->A.active) gmt_M_free (GMT, skip);
 	fclose (fp);
+	if (n_skipped) GMT_Report (API, GMT_MSG_INFORMATION, "Peaks eliminated due to -A setting: %d\n", n_skipped);
 
 	sprintf (file, "%s_slices.txt", Ctrl->D.file);
 	if ((fp = fopen (file, "w")) == NULL) {
@@ -642,7 +642,9 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				else
 					out[2] = poly->x_mean, out[3] = poly->y_mean;
 				fprintf (tp, "> %d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g\n", kp_id, poly->area, poly->z, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
-				fprintf (kp, "%g\t%g\t%g\t%g\t%d\n", out[GMT_X], out[GMT_Y], out[2], out[3], kp_id);
+				out[4] = kp_id;
+				//fprintf (kp, "%g\t%g\t%g\t%g\t%d\n", out[GMT_X], out[GMT_Y], out[2], out[3], kp_id);
+				GMT->current.io.output (GMT, kp, 5, out, NULL);
 			}
 			/* Write out the polygon perimeters */
 			for (i = 0; i < poly->n; i++) {
