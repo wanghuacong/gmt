@@ -170,7 +170,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	GMT_Message (API, GMT_TIME_NONE, "\t-I Set filename for optional index information [no indeces].\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-L Limit contours to this range [Default is -L0/inf].\n");
 	GMT_Option (API, "R");
-	GMT_Message (API, GMT_TIME_NONE, "\t-S Smooth contours by interpolation at approximately gridsize/<smooth> intervals.\n");
+	GMT_Message (API, GMT_TIME_NONE, "\t-S Smooth contours by interpolation at approximately <gridsize>/<smooth> intervals.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-T Set the foundation level for reporting peaks.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t   Note: With -L, <foundation> must be equal or larger than the <low> value.\n");
 	GMT_Option (API, "V");
