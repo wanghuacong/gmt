@@ -83,6 +83,10 @@ struct GRDSLICE_CTRL {
 		bool active;
 		double low, high;
 	} L;
+	struct GRDSLICE_Q {	/* -Q<factor> */
+		bool active;
+		double factor;
+	} Q;
 	struct GRDSLICE_S {	/* -S<smooth> */
 		bool active;
 		unsigned int value;
@@ -129,6 +133,7 @@ static void *New_Ctrl (struct GMT_CTRL *GMT) {	/* Allocate and initialize a new 
 	
 	C->L.low = 0;
 	C->L.high = DBL_MAX;
+	C->Q.factor = 8.0;
 	C->Z.scale = 1.0;
 	
 	return (C);
@@ -156,7 +161,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	if (level == GMT_MODULE_PURPOSE) return (GMT_NOERROR);
 
 	GMT_Message (API, GMT_TIME_NONE, "usage: %s <grid> -C<cont_int> [-A<area>] [-D<dist>] [-E<slicefile>] [-F<foundationfile>] [-I<indexfile>] [-L<low/high>]\n", name);
-	GMT_Message (API, GMT_TIME_NONE, "\t[%s] [-S<smooth>] [-T<foundation>] [%s] [-Z[+s<scale>][+o<offset>]] [%s]\n\n", GMT_Rgeo_OPT, GMT_V_OPT, GMT_n_OPT);
+	GMT_Message (API, GMT_TIME_NONE, "\t[%s] [-S<smooth>] [-Q<factor>] [-T<foundation>] [%s] [-Z[+s<scale>][+o<offset>]] [%s]\n\n", GMT_Rgeo_OPT, GMT_V_OPT, GMT_n_OPT);
 
 	if (level == GMT_SYNOPSIS) return (GMT_MODULE_SYNOPSIS);
 
@@ -170,6 +175,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	GMT_Message (API, GMT_TIME_NONE, "\t-I Set filename for optional index information [no indeces].\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-L Limit contours to this range [Default is -L0/inf].\n");
 	GMT_Option (API, "R");
+	GMT_Message (API, GMT_TIME_NONE, "\t-Q Sub-pixel factor for revising peak location [8].\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-S Smooth contours by interpolation at approximately <gridsize>/<smooth> intervals.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-T Set the foundation level for reporting peaks.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t   Note: With -L, <foundation> must be equal or larger than the <low> value.\n");
@@ -237,6 +243,10 @@ static int parse (struct GMT_CTRL *GMT, struct GRDSLICE_CTRL *Ctrl, struct GMT_O
 				Ctrl->L.active = true;
 				sscanf (opt->arg, "%lf/%lf", &Ctrl->L.low, &Ctrl->L.high);
 				break;
+			case 'Q':	/* Sub-pixel factor */
+				Ctrl->Q.active = true;
+				Ctrl->Q.factor = atof (opt->arg);
+				break;
 			case 'S':	/* Smooth the contours */
 				Ctrl->S.active = true;
 				j = atoi (opt->arg);
@@ -274,13 +284,24 @@ static int parse (struct GMT_CTRL *GMT, struct GRDSLICE_CTRL *Ctrl, struct GMT_O
 
 }
 
-GMT_LOCAL double grdslice_centroid_area (GMT, double *x, double *y, unsigned int n, struct GRDSLICE_SLICE *p, struct GMT_GRID *G, unsigned int geo, double pos[]) {
+GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double *y, unsigned int n, struct GRDSLICE_SLICE *p, struct GMT_GRID *G, unsigned int geo, bool refine, double factor, double pos[]) {
 	unsigned int i, j, nx, ny;
-	double area, xmin, xmax, ymin, ymax, zz, *xx = NULL, **yy = NULL;
+	double area, xmin, xmax, ymin, ymax, zz, *xx = NULL, *yy = NULL;
 	struct GMT_DATASEGMENT *P = NULL;
 	struct GMT_GRID_HEADER_HIDDEN *HH = gmt_get_H_hidden (G->header);
 
-	area = gmt_centroid_area (GMT, x, y, n, geo, NULL);	/* First get the area only */
+	if (!refine) {	/* Just get area and centroid */
+		area = gmt_centroid_area (GMT, x, y, n, geo, pos);	/* First get the area only */
+
+		if (area > 0.0)	/* Enforce CCW polygons only */
+			grdslice_reverse_polygon (x, y, n);
+		else
+			area = fabs (area);
+
+		return area;
+	}
+
+	/* Get here if we need to refine the peak location */
 
 	P = GMT_Alloc_Segment (GMT->parent, GMT_NO_STRINGS, 0, 2, NULL, NULL);
 	P->data[GMT_X] = x;
@@ -301,15 +322,15 @@ GMT_LOCAL double grdslice_centroid_area (GMT, double *x, double *y, unsigned int
 	xmax = ceil  (xmax / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
 	ymin = floor (ymin / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
 	ymax = ceil  (ymax / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
-	nx = gmtlib_make_equidistant_array (GMT, xmin, xmax, G->header->inc[GMT_X] / factor, &xx);
-	ny = gmtlib_make_equidistant_array (GMT, ymin, ymax, G->header->inc[GMT_Y] / factor, &yy);
+	nx = gmt_make_equidistant_array (GMT, xmin, xmax, G->header->inc[GMT_X] / factor, &xx);
+	ny = gmt_make_equidistant_array (GMT, ymin, ymax, G->header->inc[GMT_Y] / factor, &yy);
 	for (j = 0; j < ny; j++) {
 		for (i = 0; i < nx; i++) {
 			if (gmt_inonout (GMT, xx[i], yy[j], P) == GMT_OUTSIDE) continue;
 			zz = (HH->has_NaNs == GMT_GRID_NO_NANS) ? gmt_bcr_get_z_fast (GMT, G, xx[i], yy[j]) : gmt_bcr_get_z (GMT, G, xx[i], yy[j]);
 			if (zz > pos[GMT_Z]) {	/* Update location and value of largest value inside the contour */
-				pos[GMT_X] = xx;
-				pos[GMT_T] = yy;
+				pos[GMT_X] = xx[i];
+				pos[GMT_Y] = yy[j];
 				pos[GMT_Z] = zz;
 			}
 		}
@@ -318,13 +339,54 @@ GMT_LOCAL double grdslice_centroid_area (GMT, double *x, double *y, unsigned int
 	gmt_free_segment (GMT, &P);
 	gmt_M_free (GMT, xx);
 	gmt_M_free (GMT, yy);
+	return (0.0);
+}
 
-	if (area > 0.0)	/* Enforce CCW polygons only */
-		grdslice_reverse_polygon (x, y, n);
-	else
-		area = fabs (area);
+GMT_LOCAL void grdslice_fit_ellipse (struct GMT_CTRL *GMT, double *dx, double *dy, unsigned int n, struct GRDSLICE_SLICE *p, double *pos, double area) {
+	/* Find orientation of major/minor axes and aspect ratio from reduced, projected x,y coordinates */
+	double A[4], EigenValue[2], EigenVector[4], aspect, minor, major, sa, ca, cos_a, sin_a, xr, yr, r_fit, r, dr, a, rms, work1[2], work2[2];
+	unsigned int M = 2, nrots, i;
+	struct GMTAPI_CTRL *API = GMT->parent;
 
-	return (area);
+	A[0] = A[1] = A[2] = A[3] = 0.0;
+	for (i = 0; i < n; i++) {	/* Build dot-product 2x2 matrix using Mercator or Cartesian coordinates */
+		dx[i] -= pos[GMT_X];	/* Compute deviations from the mean location */
+		dy[i] -= pos[GMT_Y];
+		A[0] += dx[i] * dx[i];	/* Add up the covariances */
+		A[1] += dx[i] * dy[i];
+		A[3] += dy[i] * dy[i];
+	} 
+	A[2] = A[1];	/* Symmetry */
+	if (gmt_jacobi (GMT, A, M, M, EigenValue, EigenVector, work1, work2, &nrots)) {	/* Solve eigen-system A = EigenVector * EigenValue * EigenVector^T */
+		GMT_Report (API, GMT_MSG_WARNING, "Eigenvalue routine failed to converge in 50 sweeps.\n");
+	}
+	aspect = sqrt (EigenValue[0] / EigenValue[1]);	/* Major/minor aspect ratio */
+	p->azimuth = atan2 (EigenVector[1], EigenVector[0]) * R2D;	/* Actual, not azimuth yet - just angle CCW from horizontal */
+	sincosd (p->azimuth, &sa, &ca);
+	p->azimuth = 90.0 - p->azimuth;		/* Now it is a proper azimuth */
+	if (p->azimuth < 0.0) p->azimuth += 360.0;
+	
+	p->minor = sqrt (p->area / (aspect * M_PI));	/* Ellipse axes in km */
+	p->major = p->minor * aspect;
+	minor = sqrt (area / (aspect * M_PI));		/* Axes in map units */
+	major = minor * aspect;
+	
+	/* Determine a measure of fit by calculating 100.0 * (1 - rms(delta_r) / major) */
+	/* Note that dx[], dy[] are now in projected Mercator (or original Cartesian) coordinates relative to mean pos */
+	rms = 0.0;
+	for (i = 0; i < n; i++) {	/* For each point */
+		xr = dx[i] * ca - dy[i] * sa;	/* Rotate vector into eigen-system axes */
+		yr = dx[i] * sa + dy[i] * ca;
+		a = atan2 (yr, xr);		/* Angle of this vector in radians */
+		r = hypot (xr, yr);		/* Magnitude of vector */
+		sincos (a, &sin_a, &cos_a);
+		xr = major * cos_a;		/* Ellipse model prediction */
+		yr = minor * sin_a;
+		r_fit = hypot (xr, yr);		/* Model radius(angle */
+		dr = r - r_fit;			/* Misfit */
+		rms += dr * dr;
+	}
+	p->fit = 100.0 * (1 - sqrt (rms / n) / major);	/* Our fit parameter */
 }
 
 #define bailout(code) {gmt_M_free_options (mode); return (code);}
@@ -336,17 +398,17 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 	int error, cs;
 
-	unsigned int c, n_contours, n_edges, nrots, slc, n_inside, n_peaks = 0, n_slices = 0, n_foundations, index, n_skipped = 0;
-	unsigned int M = 2, geo = 0, *np = NULL, *edge = NULL;
+	unsigned int c, n_contours, n_edges, slc, n_inside, n_peaks = 0, n_slices = 0, n_foundations, index, n_skipped = 0;
+	unsigned int geo = 0, *np = NULL, *edge = NULL;
 
 	uint64_t ij, n, i, n_alloc = GMT_CHUNK, row, seg, dim[4] = {1, 1, 0, 0};
 	int64_t ns;
 
 	char header[GMT_LEN256] = {""}, *xname[2] = {"x", "geo"}, *yname[2] = {"y", "lat"};
 
-	double aspect, cval, min, max, small, scale = 1.0, minor, major, sa, ca, sin_a, cos_a, area, dr, a, pos[2];
-	double small_x, small_y, lon, lat = 0.0, min_area, max_area, xr, yr, r, r_fit, rms, merc_x0 = 0.0, merc_y0 = 0.0;
-	double wesn[4], A[4], EigenValue[2], EigenVector[4], out[9], work1[2], work2[2], *x = NULL, *y = NULL, *contour = NULL;
+	double aspect, cval, min, max, small, scale = 1.0, area, pos[2], *dx = NULL, *dy = NULL;
+	double small_x, small_y, lon, lat = 0.0, min_area, max_area, merc_x0 = 0.0, merc_y0 = 0.0;
+	double wesn[4], A[4], EigenValue[2], EigenVector[4], out[9], *x = NULL, *y = NULL, *contour = NULL;
 	double wesn_m[4] = {GMT_IMG_MINLON, GMT_IMG_MAXLON, GMT_IMG_MINLAT_80, GMT_IMG_MAXLAT_80};
 
 	struct GMT_GRID *G = NULL, *G_orig = NULL;
@@ -504,7 +566,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			this_slice->z = cval;
 
 			/* Get signed area and point of max grid value inside contour from geographic, Mercator, or Cartesian coordinates */
-			area = grdslice_centroid_area (GMT, this_slice, G, geo, pos);
+			area = grdslice_centroid_area (GMT, x, y, n, this_slice, G, geo, false, Ctrl->Q.factor, pos);
 
 			/* Below we want all coordinates to be projected Mercator (or the original Cartesian) except x_mean/y_mean which will be in degrees (unless Cartesian) */
 
@@ -540,52 +602,20 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 			GMT_Report (API, GMT_MSG_DEBUG, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
 			
+			dx = gmt_M_memory (GMT, NULL, n, double);
+			dy = gmt_M_memory (GMT, NULL, n, double);
+			gmt_M_memcpy (dx, x, n, double);	/* Copy polygon projected coordinates to this array so we can make deviations from mean location */
+			gmt_M_memcpy (dy, y, n, double);	/* Copy polygon projected coordinates to this array so we can make deviations from mean location */
+
 			/* Find orientation of major/minor axes and aspect ratio from reduced, projected x,y coordinates */
-			A[0] = A[1] = A[2] = A[3] = 0.0;
-			for (i = 0; i < n; i++) {	/* Build dot-product 2x2 matrix using Mercator or Cartesian coordinates */
-				x[i] -= pos[GMT_X];	/* Compute deviations from the mean location */
-				y[i] -= pos[GMT_Y];
-				A[0] += x[i] * x[i];	/* Add up the covariances */
-				A[1] += x[i] * y[i];
-				A[3] += y[i] * y[i];
-			} 
-			A[2] = A[1];	/* Symmetry */
-			if (gmt_jacobi (GMT, A, M, M, EigenValue, EigenVector, work1, work2, &nrots)) {	/* Solve eigen-system A = EigenVector * EigenValue * EigenVector^T */
-				GMT_Report (API, GMT_MSG_WARNING, "Eigenvalue routine failed to converge in 50 sweeps.\n");
-			}
-			aspect = sqrt (EigenValue[0] / EigenValue[1]);	/* Major/minor aspect ratio */
-			this_slice->azimuth = atan2 (EigenVector[1], EigenVector[0]) * R2D;	/* Actual, not azimuth yet - just angle CCW from horizontal */
-			sincosd (this_slice->azimuth, &sa, &ca);
-			this_slice->azimuth = 90.0 - this_slice->azimuth;		/* Now it is a proper azimuth */
-			if (this_slice->azimuth < 0.0) this_slice->azimuth += 360.0;
-			
-			this_slice->minor = sqrt (this_slice->area / (aspect * M_PI));	/* Ellipse axes in km */
-			this_slice->major = this_slice->minor * aspect;
-			minor = sqrt (area / (aspect * M_PI));		/* Axes in map units */
-			major = minor * aspect;
-			
-			/* Determine a measure of fit by calculating 100.0 * (1 - rms(delta_r) / major) */
-			/* Note that x[], y[] are now in projected Mercator (or original Cartesian) coordinates relative to mean pos */
-			rms = 0.0;
-			for (i = 0; i < n; i++) {	/* For each point */
-				xr = x[i] * ca - y[i] * sa;	/* Rotate vector into eigen-system axes */
-				yr = x[i] * sa + y[i] * ca;
-				a = atan2 (yr, xr);		/* Angle of this vector in radians */
-				r = hypot (xr, yr);		/* Magnitude of vector */
-				sincos (a, &sin_a, &cos_a);
-				xr = major * cos_a;		/* Ellipse model prediction */
-				yr = minor * sin_a;
-				r_fit = hypot (xr, yr);		/* Model radius(angle */
-				dr = r - r_fit;			/* Misfit */
-				rms += dr * dr;
-			}
-			this_slice->fit = 100.0 * (1 - sqrt (rms / n) / major);	/* Our fit parameter */
+
+			grdslice_fit_ellipse (GMT, dx, dy, n, this_slice, pos, area);
 			
 			/* Update information of min/max area */
 			if (this_slice->area > max_area) max_area = this_slice->area;
 			if (this_slice->area < min_area) min_area = this_slice->area;
 			
-			gmt_M_free (GMT, x);	gmt_M_free (GMT, y);	/* Free original memory returned by gmt_contours */
+			gmt_M_free (GMT, dx);	gmt_M_free (GMT, dy);	/* Free dx,dy memory */
 			
 			n_slices++;
 			
@@ -621,6 +651,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				}
 			}
 			if (n_inside == 0) {	/* No previous contours contained by this contour - initialize a new peak location at the center of this slice */
+				/* Must revise the peak location and amplitude via BCR brute force search */
+				(void)grdslice_centroid_area (GMT, x, y, n, this_slice, G, geo, true, Ctrl->Q.factor, pos);
 				this_peak = gmt_M_memory (GMT, NULL, 1, struct GRDSLICE_PEAK);
 				this_peak->x = this_slice->x_mean;	/* Just use mean location for now - perhaps later choose the actual grid maximum */
 				this_peak->y = this_slice->y_mean;
@@ -634,6 +666,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 					peak = gmt_M_memory (GMT, peak, n_alloc, struct GRDSLICE_PEAK *);
 				}
 			}
+			gmt_M_free (GMT, x);	gmt_M_free (GMT, y);	/* Free original memory returned by gmt_contours */
 
 		}
 		GMT_Report (API, GMT_MSG_INFORMATION, "Tracing the %8.2f contour: # of slices: %6d # of peaks: %6d\n", cval, n_slices, n_peaks);

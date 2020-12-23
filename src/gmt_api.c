@@ -10789,7 +10789,7 @@ void * GMT_Create_Data (void *V_API, unsigned int family, unsigned int geometry,
 					C->z_range[0] = range[ZLO];	C->z_range[1] = range[ZHI];
 					if (inc && inc[GMT_Z] > 0.0) {	/* Must make equidistant array, else we lave it as NULL to be set by calling module */
 						HU = gmt_get_U_hidden (C);
-						C->header->n_bands = gmtlib_make_equidistant_array (API->GMT, range[ZLO], range[ZHI], inc[GMT_Z], &(C->z));
+						C->header->n_bands = gmt_make_equidistant_array (API->GMT, range[ZLO], range[ZHI], inc[GMT_Z], &(C->z));
 						C->z_inc = inc[GMT_Z];
 						HU->xyz_alloc_mode[GMT_Z] = GMT_ALLOC_INTERNALLY;
 					}
