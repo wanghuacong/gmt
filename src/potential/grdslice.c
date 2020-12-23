@@ -43,7 +43,7 @@
 #define THIS_MODULE_PURPOSE	"Detect isolated peaks by contour-slicing a grid"
 #define THIS_MODULE_KEYS	"<G{,>D},DD),ED),FD)"
 #define THIS_MODULE_NEEDS	"g"
-#define THIS_MODULE_OPTIONS "-:RVf"
+#define THIS_MODULE_OPTIONS "-:RVfn"
 
 struct GRDSLICE_CTRL {
 	struct GMT_CONTOUR contour;
@@ -156,7 +156,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	if (level == GMT_MODULE_PURPOSE) return (GMT_NOERROR);
 
 	GMT_Message (API, GMT_TIME_NONE, "usage: %s <grid> -C<cont_int> [-A<area>] [-D<dist>] [-E<slicefile>] [-F<foundationfile>] [-I<indexfile>] [-L<low/high>]\n", name);
-	GMT_Message (API, GMT_TIME_NONE, "\t[%s] [-S<smooth>] [-T<foundation>] [%s] [-Z[+s<scale>][+o<offset>]]\n\n", GMT_Rgeo_OPT, GMT_V_OPT);
+	GMT_Message (API, GMT_TIME_NONE, "\t[%s] [-S<smooth>] [-T<foundation>] [%s] [-Z[+s<scale>][+o<offset>]] [%s]\n\n", GMT_Rgeo_OPT, GMT_V_OPT, GMT_n_OPT);
 
 	if (level == GMT_SYNOPSIS) return (GMT_MODULE_SYNOPSIS);
 
@@ -175,7 +175,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	GMT_Message (API, GMT_TIME_NONE, "\t   Note: With -L, <foundation> must be equal or larger than the <low> value.\n");
 	GMT_Option (API, "V");
 	GMT_Message (API, GMT_TIME_NONE, "\t-Z Subtract <shift> (via +o<shift> [0]) and multiply data by <fact> (via +s<fact> [1]).\n");
-	GMT_Option (API, "f,.");
+	GMT_Option (API, "f,n,.");
 
 	return (GMT_MODULE_USAGE);
 }
@@ -272,6 +272,59 @@ static int parse (struct GMT_CTRL *GMT, struct GRDSLICE_CTRL *Ctrl, struct GMT_O
 
 	return (n_errors ? GMT_PARSE_ERROR : GMT_NOERROR);
 
+}
+
+GMT_LOCAL double grdslice_centroid_area (GMT, double *x, double *y, unsigned int n, struct GRDSLICE_SLICE *p, struct GMT_GRID *G, unsigned int geo, double pos[]) {
+	unsigned int i, j, nx, ny;
+	double area, xmin, xmax, ymin, ymax, zz, *xx = NULL, **yy = NULL;
+	struct GMT_DATASEGMENT *P = NULL;
+	struct GMT_GRID_HEADER_HIDDEN *HH = gmt_get_H_hidden (G->header);
+
+	area = gmt_centroid_area (GMT, x, y, n, geo, NULL);	/* First get the area only */
+
+	P = GMT_Alloc_Segment (GMT->parent, GMT_NO_STRINGS, 0, 2, NULL, NULL);
+	P->data[GMT_X] = x;
+	P->data[GMT_Y] = y;
+	P->n_rows = n;
+
+	/* Determine extent of grid coordinates of the contour */
+	xmin = ymin = +DBL_MAX;
+	xmax = ymax = pos[GMT_Z] = -DBL_MAX;
+	for (i = 0; i < n; i++) {	/* Determine extreme projected coordinate values */
+		if (x[i] < xmin) xmin = x[i];
+		if (x[i] > xmax) xmax = x[i];
+		if (y[i] < ymin) ymin = y[i];
+		if (y[i] > ymax) ymax = y[i];
+	}
+	/* Round the min/max coordinates outwards to grid steps */
+	xmin = floor (xmin / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
+	xmax = ceil  (xmax / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
+	ymin = floor (ymin / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
+	ymax = ceil  (ymax / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
+	nx = gmtlib_make_equidistant_array (GMT, xmin, xmax, G->header->inc[GMT_X] / factor, &xx);
+	ny = gmtlib_make_equidistant_array (GMT, ymin, ymax, G->header->inc[GMT_Y] / factor, &yy);
+	for (j = 0; j < ny; j++) {
+		for (i = 0; i < nx; i++) {
+			if (gmt_inonout (GMT, xx[i], yy[j], P) == GMT_OUTSIDE) continue;
+			zz = (HH->has_NaNs == GMT_GRID_NO_NANS) ? gmt_bcr_get_z_fast (GMT, G, xx[i], yy[j]) : gmt_bcr_get_z (GMT, G, xx[i], yy[j]);
+			if (zz > pos[GMT_Z]) {	/* Update location and value of largest value inside the contour */
+				pos[GMT_X] = xx;
+				pos[GMT_T] = yy;
+				pos[GMT_Z] = zz;
+			}
+		}
+	}
+	P->data[GMT_X] = P->data[GMT_Y] = NULL;
+	gmt_free_segment (GMT, &P);
+	gmt_M_free (GMT, xx);
+	gmt_M_free (GMT, yy);
+
+	if (area > 0.0)	/* Enforce CCW polygons only */
+		grdslice_reverse_polygon (x, y, n);
+	else
+		area = fabs (area);
+
+	return (area);
 }
 
 #define bailout(code) {gmt_M_free_options (mode); return (code);}
@@ -450,12 +503,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			this_slice->n = n;
 			this_slice->z = cval;
 
-			/* Get signed area and centroid from geographic, Mercator, or Cartesian coordinates */
-			area = gmt_centroid_area (GMT, x, y, n, geo, pos);
-			if (area > 0.0)	/* Enforce CCW polygons only */
-				grdslice_reverse_polygon (x, y, n);
-			else
-				area = fabs (area);
+			/* Get signed area and point of max grid value inside contour from geographic, Mercator, or Cartesian coordinates */
+			area = grdslice_centroid_area (GMT, this_slice, G, geo, pos);
 
 			/* Below we want all coordinates to be projected Mercator (or the original Cartesian) except x_mean/y_mean which will be in degrees (unless Cartesian) */
 
