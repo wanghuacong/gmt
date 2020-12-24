@@ -163,7 +163,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	if (level == GMT_MODULE_PURPOSE) return (GMT_NOERROR);
 
 	GMT_Message (API, GMT_TIME_NONE, "usage: %s <grid> -C<cont_int> [-A<area>] [-D<dist>] [-E<slicefile>] [-F<foundationfile>] [-I<indexfile>] [-L<low/high>]\n", name);
-	GMT_Message (API, GMT_TIME_NONE, "\t[%s] [-S<smooth>] [-Q<factor>] [-T<foundation>] [%s] [-Z[+s<scale>][+o<offset>]] [%s]\n\n", GMT_Rgeo_OPT, GMT_V_OPT, GMT_n_OPT);
+	GMT_Message (API, GMT_TIME_NONE, "\t[%s] [-S<smooth>] [-Q<divisor>] [-T<foundation>] [%s] [-Z[+s<scale>][+o<offset>]] [%s]\n\n", GMT_Rgeo_OPT, GMT_V_OPT, GMT_n_OPT);
 
 	if (level == GMT_SYNOPSIS) return (GMT_MODULE_SYNOPSIS);
 
@@ -177,7 +177,7 @@ static int usage (struct GMTAPI_CTRL *API, int level) {
 	GMT_Message (API, GMT_TIME_NONE, "\t-I Set filename for optional index information [no indeces].\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-L Limit contours to this range [Default is -L0/inf].\n");
 	GMT_Option (API, "R");
-	GMT_Message (API, GMT_TIME_NONE, "\t-Q Sub-pixel factor for revising peak location [8].\n");
+	GMT_Message (API, GMT_TIME_NONE, "\t-Q Sub-pixel division for grid-search revising peak location [8].\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-S Smooth contours by interpolation at approximately <gridsize>/<smooth> intervals.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t-T Set the foundation level for reporting peaks.\n");
 	GMT_Message (API, GMT_TIME_NONE, "\t   Note: With -L, <foundation> must be equal or larger than the <low> value.\n");
@@ -799,14 +799,16 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			poly = slice[c];		/* First contour polygon at this contour level */
 			while (poly) {			/* As long as there are more polygons at this level */
 				if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) {
-					if (geo)
-						gmt_geo_to_xy (GMT, poly->x_mean, poly->y_mean, &SI->data[2][index], &SI->data[3][index]);
-					else
-						SI->data[2][index] = poly->x_mean, SI->data[3][index] = poly->y_mean;
-					if (Ctrl->I.active) {	/* Fill out one index record with format: lon lat x y id */
-						SI->data[GMT_X][index] = poly->x_mean;
-						SI->data[GMT_Y][index] = poly->y_mean;
-						SI->data[4][index] = index;
+					if (Ctrl->I.active) {
+						if (geo)
+							gmt_geo_to_xy (GMT, poly->x_mean, poly->y_mean, &SI->data[2][index], &SI->data[3][index]);
+						else
+							SI->data[2][index] = poly->x_mean, SI->data[3][index] = poly->y_mean;
+						if (Ctrl->I.active) {	/* Fill out one index record with format: lon lat x y id */
+							SI->data[GMT_X][index] = poly->x_mean;
+							SI->data[GMT_Y][index] = poly->y_mean;
+							SI->data[4][index] = index;
+						}
 					}
 					if (Ctrl->F.active) {	/* Write out the foundation contour. Format: x y z */
 						sprintf (header, "%d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", index, poly->area, poly->cval, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);

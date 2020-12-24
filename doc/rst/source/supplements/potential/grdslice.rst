@@ -21,6 +21,7 @@ Synopsis
 [ |-F|\ [*foundationfile*] ]
 [ |-I|\ [*indexfile*] ]
 [ |-L|\ *low/high* ]
+[ |-Q|\ *divisor* ]
 [ |-S|\ *smoothfactor* ]
 [ |-T|\ *foundation* ]
 [ |SYN_OPT-V| ]
@@ -91,6 +92,12 @@ Optional Arguments
 
 **-L**\ *low/high*
     Limit contour range: Only do the contour slicing within the specified range of contours [use he entire range].
+
+.. _-Q:
+
+**-Q**\ *divisor*
+    The location and amplitude of each peak is refined by a grid search on a sub-pixel lattice inside the closed
+    uppermost contour.  The *divisor* is used to subdivide the grid intervals by that factor [8].
 
 .. _-S:
 
