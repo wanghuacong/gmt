@@ -798,17 +798,17 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		for (c = seg = slc = index = 0; c < n_contours; c++) {	/* For each slice */
 			poly = slice[c];		/* First contour polygon at this contour level */
 			while (poly) {			/* As long as there are more polygons at this level */
+				if (geo)
+					gmt_geo_to_xy (GMT, poly->x_mean, poly->y_mean, &out[GMT_X], &out[GMT_Y]);
+				else
+					out[GMT_X] = poly->x_mean, out[GMT_Y] = poly->y_mean;
 				if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) {
-					if (Ctrl->I.active) {
-						if (geo)
-							gmt_geo_to_xy (GMT, poly->x_mean, poly->y_mean, &SI->data[2][index], &SI->data[3][index]);
-						else
-							SI->data[2][index] = poly->x_mean, SI->data[3][index] = poly->y_mean;
-						if (Ctrl->I.active) {	/* Fill out one index record with format: lon lat x y id */
-							SI->data[GMT_X][index] = poly->x_mean;
-							SI->data[GMT_Y][index] = poly->y_mean;
-							SI->data[4][index] = index;
-						}
+					if (Ctrl->I.active) {	/* Fill out one index record with format: lon lat x y id */
+						SI->data[GMT_X][index] = poly->x_mean;
+						SI->data[GMT_Y][index] = poly->y_mean;
+						SI->data[2][index] = out[GMT_X];
+						SI->data[3][index] = out[GMT_Y];
+						SI->data[4][index] = index;
 					}
 					if (Ctrl->F.active) {	/* Write out the foundation contour. Format: x y z */
 						sprintf (header, "%d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", index, poly->area, poly->cval, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
