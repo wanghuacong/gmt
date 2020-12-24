@@ -301,7 +301,7 @@ GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double
 		return area;
 	}
 
-	/* Get here if we need to refine the peak location */
+	/* Get here if we need to refine the peak location. (x,y) must be in same coordinate system as G */
 
 	P = GMT_Alloc_Segment (GMT->parent, GMT_NO_STRINGS, 0, 2, NULL, NULL);
 	P->data[GMT_X] = x;
@@ -406,7 +406,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 	char header[GMT_LEN256] = {""}, *xname[2] = {"x", "geo"}, *yname[2] = {"y", "lat"};
 
-	double aspect, cval, min, max, small, scale = 1.0, area, pos[2], *dx = NULL, *dy = NULL;
+	double aspect, cval, min, max, small, scale = 1.0, area, pos[2], *x_orig = NULL, *y_orig = NULL;
 	double small_x, small_y, lon, lat = 0.0, min_area, max_area, merc_x0 = 0.0, merc_y0 = 0.0;
 	double wesn[4], A[4], EigenValue[2], EigenVector[4], out[9], *x = NULL, *y = NULL, *contour = NULL;
 	double wesn_m[4] = {GMT_IMG_MINLON, GMT_IMG_MAXLON, GMT_IMG_MINLAT_80, GMT_IMG_MAXLAT_80};
@@ -570,6 +570,10 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 			/* Below we want all coordinates to be projected Mercator (or the original Cartesian) except x_mean/y_mean which will be in degrees (unless Cartesian) */
 
+			x_orig = gmt_M_memory (GMT, NULL, n, double);
+			y_orig = gmt_M_memory (GMT, NULL, n, double);
+			gmt_M_memcpy (x_orig, x, n, double);	/* Copy original grid coordinates */
+			gmt_M_memcpy (y_orig, y, n, double);
 			if (geo) {	/* Contour coordinates (x, y) are geographic (lon, lat), convert to Mercator */
 				for (i = 0; i < n; i++)
 					gmt_geo_to_xy (GMT, x[i], y[i], &this_slice->x[i], &this_slice->y[i]);
@@ -602,20 +606,14 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 			GMT_Report (API, GMT_MSG_DEBUG, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
 			
-			dx = gmt_M_memory (GMT, NULL, n, double);
-			dy = gmt_M_memory (GMT, NULL, n, double);
-			gmt_M_memcpy (dx, x, n, double);	/* Copy polygon projected coordinates to this array so we can make deviations from mean location */
-			gmt_M_memcpy (dy, y, n, double);	/* Copy polygon projected coordinates to this array so we can make deviations from mean location */
 
 			/* Find orientation of major/minor axes and aspect ratio from reduced, projected x,y coordinates */
 
-			grdslice_fit_ellipse (GMT, dx, dy, n, this_slice, pos, area);
+			grdslice_fit_ellipse (GMT, x, y, n, this_slice, pos, area);
 			
 			/* Update information of min/max area */
 			if (this_slice->area > max_area) max_area = this_slice->area;
 			if (this_slice->area < min_area) min_area = this_slice->area;
-			
-			gmt_M_free (GMT, dx);	gmt_M_free (GMT, dy);	/* Free dx,dy memory */
 			
 			n_slices++;
 			
@@ -652,7 +650,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			}
 			if (n_inside == 0) {	/* No previous contours contained by this contour - initialize a new peak location at the center of this slice */
 				/* Must revise the peak location and amplitude via BCR brute force search */
-				(void)grdslice_centroid_area (GMT, x, y, n, this_slice, G, geo, true, Ctrl->Q.factor, pos);
+				(void)grdslice_centroid_area (GMT, x_orig, y_orig, n, this_slice, G, geo, true, Ctrl->Q.factor, pos);
 				this_peak = gmt_M_memory (GMT, NULL, 1, struct GRDSLICE_PEAK);
 				this_peak->x = this_slice->x_mean;	/* Just use mean location for now - perhaps later choose the actual grid maximum */
 				this_peak->y = this_slice->y_mean;
@@ -667,6 +665,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				}
 			}
 			gmt_M_free (GMT, x);	gmt_M_free (GMT, y);	/* Free original memory returned by gmt_contours */
+			gmt_M_free (GMT, x_orig);	gmt_M_free (GMT, y_orig);	/* Free original x/y coordinates */
 
 		}
 		GMT_Report (API, GMT_MSG_INFORMATION, "Tracing the %8.2f contour: # of slices: %6d # of peaks: %6d\n", cval, n_slices, n_peaks);
