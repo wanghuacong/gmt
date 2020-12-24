@@ -105,7 +105,8 @@ struct GRDSLICE_SLICE {	/* Hold each contour slice information */
 	int n;				/* Number of points in this slice polygon */
 	int id;				/* Unique ID number */
 	int shared;			/* Number of peaks that share this slice */
-	double z;			/* Z-value (contour) of this slice */
+	double cval;			/* Contour of this slice */
+	double z;			/* Z-value of this slice, initially at peak (so may be > cval) */
 	double *x, *y;			/* The array of Mercator or Cartesian (x,y) coordinates */
 	double xmin, xmax, ymin, ymax;	/* Extreme Mercator or Cartesian coordinates of polygon */
 	double x_mean, y_mean;	/* Mean geographic or Cartesian coordinate as approximation of center point */
@@ -120,6 +121,7 @@ struct GRDSLICE_SLICE {	/* Hold each contour slice information */
 struct GRDSLICE_PEAK {	/* Hold start of peak and linked list of slices */
 	int id;				/* Unique ID number */
 	double x, y;		/* Mean Mercator or Cartesian coordinate of peak */
+	double cval;		/* Z-value (contour) of this peak */
 	double z;			/* Z-value (contour) of this peak */
 	struct GRDSLICE_SLICE *start;		/* Pointer to top slice in stack */
 };
@@ -306,22 +308,17 @@ GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double
 	P = GMT_Alloc_Segment (GMT->parent, GMT_NO_STRINGS, 0, 2, NULL, NULL);
 	P->data[GMT_X] = x;
 	P->data[GMT_Y] = y;
+	pos[GMT_X] = p->x_mean;	/* Initial location is mean of contour perimeter */
+	pos[GMT_Z] = p->y_mean;
+	pos[GMT_Z] = p->cval;	/* Initial peak value is contour value */
 	P->n_rows = n;
+	gmt_set_seg_minmax (GMT, GMT_IS_POLY, 2, P);	/* Update min/max of x/y only */
 
-	/* Determine extent of grid coordinates of the contour */
-	xmin = ymin = +DBL_MAX;
-	xmax = ymax = pos[GMT_Z] = -DBL_MAX;
-	for (i = 0; i < n; i++) {	/* Determine extreme projected coordinate values */
-		if (x[i] < xmin) xmin = x[i];
-		if (x[i] > xmax) xmax = x[i];
-		if (y[i] < ymin) ymin = y[i];
-		if (y[i] > ymax) ymax = y[i];
-	}
 	/* Round the min/max coordinates outwards to grid steps */
-	xmin = floor (xmin / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
-	xmax = ceil  (xmax / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
-	ymin = floor (ymin / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
-	ymax = ceil  (ymax / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
+	xmin = floor (P->min[GMT_X] / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
+	xmax = ceil  (P->max[GMT_X] / G->header->inc[GMT_X]) * G->header->inc[GMT_X];
+	ymin = floor (P->min[GMT_Y] / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
+	ymax = ceil  (P->max[GMT_Y] / G->header->inc[GMT_Y]) * G->header->inc[GMT_Y];
 	nx = gmt_make_equidistant_array (GMT, xmin, xmax, G->header->inc[GMT_X] / factor, &xx);
 	ny = gmt_make_equidistant_array (GMT, ymin, ymax, G->header->inc[GMT_Y] / factor, &yy);
 	for (j = 0; j < ny; j++) {
@@ -406,7 +403,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 	char header[GMT_LEN256] = {""}, *xname[2] = {"x", "geo"}, *yname[2] = {"y", "lat"};
 
-	double aspect, cval, min, max, small, scale = 1.0, area, pos[2], *x_orig = NULL, *y_orig = NULL;
+	double aspect, cval, min, max, small, scale = 1.0, area, pos[3], *x_orig = NULL, *y_orig = NULL;
 	double small_x, small_y, lon, lat = 0.0, min_area, max_area, merc_x0 = 0.0, merc_y0 = 0.0;
 	double wesn[4], A[4], EigenValue[2], EigenVector[4], out[9], *x = NULL, *y = NULL, *contour = NULL;
 	double wesn_m[4] = {GMT_IMG_MINLON, GMT_IMG_MAXLON, GMT_IMG_MINLAT_80, GMT_IMG_MAXLAT_80};
@@ -567,6 +564,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 
 			/* Get signed area and point of max grid value inside contour from geographic, Mercator, or Cartesian coordinates */
 			area = grdslice_centroid_area (GMT, x, y, n, this_slice, G, geo, false, Ctrl->Q.factor, pos);
+			this_slice->cval = cval;
 
 			/* Below we want all coordinates to be projected Mercator (or the original Cartesian) except x_mean/y_mean which will be in degrees (unless Cartesian) */
 
@@ -650,11 +648,17 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			}
 			if (n_inside == 0) {	/* No previous contours contained by this contour - initialize a new peak location at the center of this slice */
 				/* Must revise the peak location and amplitude via BCR brute force search */
-				(void)grdslice_centroid_area (GMT, x_orig, y_orig, n, this_slice, G, geo, true, Ctrl->Q.factor, pos);
+				(void)grdslice_centroid_area (GMT, x_orig, y_orig, n, this_slice, G_orig, geo, true, Ctrl->Q.factor, pos);
+				if (is_mercator)
+					gmt_xy_to_geo (GMT, &this_slice->x_mean, &this_slice->y_mean, pos[GMT_X] + merc_x0, pos[GMT_Y] + merc_y0);
+				else
+					this_slice->x_mean = pos[GMT_X], this_slice->y_mean = pos[GMT_Y];
+				this_slice->z = pos[GMT_Z];
 				this_peak = gmt_M_memory (GMT, NULL, 1, struct GRDSLICE_PEAK);
 				this_peak->x = this_slice->x_mean;	/* Just use mean location for now - perhaps later choose the actual grid maximum */
 				this_peak->y = this_slice->y_mean;
-				this_peak->z = this_slice->z;		/* Likewise - this might eventually be the local high value in the grid */
+				this_peak->cval = this_slice->cval;		/* Contour value */
+				this_peak->z = this_slice->z;		/* The local high value in the grid */
 				this_peak->start = this_slice;		/* This is the top slice in the stack below this point */
 				this_peak->id = n_peaks;			/* This is the unique peak ID */
 				peak[n_peaks] = this_peak;			/* Add peak to peak array */
@@ -720,11 +724,11 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		}
 		np[c] = row;	/* Number of slices per peak */
 		n_slices += np[c];	/* Total number of slices found so far */
-		sprintf (header, "-Z%g -L%d", peak[c]->z, peak[c]->id);
+		sprintf (header, "-Z%g -L%d", peak[c]->cval, peak[c]->id);
 		S = GMT_Alloc_Segment (API, GMT_NO_STRINGS, np[c], Center->n_columns, header, Center->table[0]->segment[seg]);
 		poly = peak[c]->start;		/* Back to first contour again */
 		row = 0;
-		while (poly) {			/* As long as there are more polygons at this level */
+		while (poly) {			/* As long as there are more polygons at this level. Format: x y z id area major minor azimuth fit */
 			S->data[GMT_X][row] = poly->x_mean;	S->data[GMT_Y][row] = poly->y_mean;	S->data[GMT_Z][row] = poly->z;
 			S->data[3][row] = peak[c]->id; S->data[4][row] = poly->area; S->data[5][row] = poly->major;
 			S->data[6][row] = poly->minor; S->data[7][row] = poly->azimuth; S->data[8][row] = poly->fit;
@@ -783,7 +787,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				Return (API->error);
 			}
 		}
-		if (Ctrl->I.active) {	/* Must write index points to a single segment in the table */
+		if (Ctrl->I.active) {	/* Must write index points to a single segment in the table. Format: lon lat x y id */
 			dim[GMT_SEG] = 1;	dim[GMT_ROW] = n_foundations;	dim[GMT_COL] = 5;
 			if ((Index = GMT_Create_Data (API, GMT_IS_DATASET, GMT_IS_POINT, 0, dim, NULL, NULL, 0, 0, NULL)) == NULL) {
 				Return (API->error);
@@ -804,8 +808,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 						SI->data[GMT_Y][index] = poly->y_mean;
 						SI->data[4][index] = index;
 					}
-					if (Ctrl->F.active) {	/* Write out the foundation contour */
-						sprintf (header, "%d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", index, poly->area, poly->z, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
+					if (Ctrl->F.active) {	/* Write out the foundation contour. Format: x y z */
+						sprintf (header, "%d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", index, poly->area, poly->cval, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
 						S = GMT_Alloc_Segment (API, GMT_NO_STRINGS, poly->n, Foundation->n_columns, header, Foundation->table[0]->segment[index]);
 						for (row = 0; row < poly->n; row++) {
 							if (geo)	/* Get lon, lat */
@@ -817,8 +821,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 					}
 					index++;
 				}
-				if (Ctrl->E.active) {	/* Write out all the polygon perimeters */
-					sprintf (header, "-Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", poly->area, poly->z, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
+				if (Ctrl->E.active) {	/* Write out all the polygon perimeters. Format: x y z  */
+					sprintf (header, "-Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", poly->area, poly->cval, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
 					S = GMT_Alloc_Segment (API, GMT_NO_STRINGS, poly->n, Slice->n_columns, header, Slice->table[0]->segment[slc]);
 					for (row = 0; row < poly->n; row++) {
 						if (geo)	/* Get lon, lat */
@@ -884,79 +888,6 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	gmt_M_free (GMT, slice);
 	gmt_M_free (GMT, last);
 	gmt_M_free (GMT, np);
-
-#if 0
-	sprintf (file, "%s_slices.txt", Ctrl->D.file);
-	if ((fp = fopen (file, "w")) == NULL) {
-		GMT_Report (API, GMT_MSG_ERROR, "Unable to create file %s\n", file);
-		Return (EXIT_FAILURE);
-	}
-
-	if (Ctrl->T.active) {
-		sprintf (bfile, "%s_bases.txt", Ctrl->D.file);
-		if ((tp = fopen (bfile, "w")) == NULL) {
-			GMT_Report (API, GMT_MSG_ERROR, "Unable to create file %s\n", bfile);
-			Return (EXIT_FAILURE);
-		}
-		sprintf (kfile, "%s_indices.txt", Ctrl->D.file);
-		if ((kp = fopen (kfile, "w")) == NULL) {
-			GMT_Report (API, GMT_MSG_ERROR, "Unable to create file %s\n", kfile);
-			Return (EXIT_FAILURE);
-		}
-	}
-
-	for (c = seg = n_skipped = 0; c < n_peaks; c++) {	/* For each peak */
-		if (Ctrl->A.active && skip[c])	continue;	/* Skipped peak */
-		poly = slice[c];		/* First contour polygon at this contour level */
-		while (poly) {			/* As long as there are more polygons at this level */
-			/* Output a multisegment header and body */
-			out[GMT_X] = poly->x_mean;	out[GMT_Y] = poly->y_mean;
-			fprintf (fp, "> -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g\n", poly->area, poly->z, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
-			dump = (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff);
-
-			if (dump) {	/* indices file format: lon lat x y id */
-				index++;
-				if (geo)
-					gmt_geo_to_xy (GMT, poly->x_mean, poly->y_mean, &out[2], &out[3]);
-				else
-					out[2] = poly->x_mean, out[3] = poly->y_mean;
-				fprintf (tp, "> %d -Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g\n", index, poly->area, poly->z, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
-				out[4] = index;
-				//fprintf (kp, "%g\t%g\t%g\t%g\t%d\n", out[GMT_X], out[GMT_Y], out[2], out[3], index);
-				GMT->current.io.output (GMT, kp, 5, out, NULL);
-			}
-			/* Write out the polygon perimeters */
-			for (i = 0; i < poly->n; i++) {
-				out[GMT_X] = poly->x[i];	out[GMT_Y] = poly->y[i];	out[GMT_Z] = poly->z;
-				if (geo) {	/* Get lon, lat */
-					gmt_xy_to_geo (GMT, &lon, &lat, out[GMT_X] + merc_x0, out[GMT_Y] + merc_y0);
-					out[GMT_X] = lon; out[GMT_Y] = lat;
-				}
-				GMT->current.io.output (GMT, fp, 3, out, NULL);
-				if (dump)
-					GMT->current.io.output (GMT, tp, 3, out, NULL);
-			}
-			this_slice = poly;
-			poly = poly->next;		/* Go to next polygon in this contour list */
-            
-			gmt_M_free (GMT, this_slice->x);
-			gmt_M_free (GMT, this_slice->y);
-			gmt_M_free (GMT, this_slice);	/* Free memory as we go */
-		}
-	}
-    fclose (fp);
-
-	if (Ctrl->T.active) {	/* Finish the job */
-		fclose (tp);
-		fclose (kp);
-		if (index == 0) {
-			GMT_Report (API, GMT_MSG_WARNING, "No peak bases or indices written to %s and %s despite -T being set\n", bfile, kfile);
-			gmt_remove_file (GMT, bfile);
-			gmt_remove_file (GMT, kfile);
-		}
-	}
-#endif
-
 
 	GMT_Report (API, GMT_MSG_INFORMATION, "Done, min/max areas: %g %g\n", min_area, max_area);
 
