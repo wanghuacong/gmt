@@ -646,14 +646,14 @@ MAP Parameters
         to draw the axis only, but not annotate.   To *just* draw an axis
         without annotation and ticks you can use the **l**\ (eft), **r**\ (ight),
         **b**\ (ottom), **t**\ (op) and (for 3-D) **u**\ (p) codes. Add an
-        optional **+** to draw a cube of axes in perspective view. [WESN].
+        optional **+b** to draw a cube of axes in perspective view. [WESN].
 
     **MAP_FRAME_PEN**
         Pen attributes used to draw plain map frame [thicker,black].
 
     **MAP_FRAME_TYPE**
         Choose between **inside**, **plain** and **fancy** (thick boundary,
-        alternating black/white frame; append **+** for rounded corners)
+        alternating black/white frame; append **-rounded** for rounded corners)
         [fancy]. For some map projections (e.g., Oblique Mercator), plain is
         the only option even if fancy is set as default. In general, fancy
         only applies to situations where the projected x and y directions
