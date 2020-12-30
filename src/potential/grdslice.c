@@ -459,13 +459,16 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	}
 
 	if (gmt_M_is_geographic (GMT, GMT_IN)) geo = 1;	/* Geo means input grid is in geographic degrees */
-	is_mercator = (strstr (G->header->remark, "Spherical Mercator Projected with -Jm1") != NULL);	/* Do we detect a Mercator grid */
+	is_mercator = (strstr (G->header->remark, "Spherical Mercator Projected with -Jm1") != NULL);	/* Do we detect a Mercator grid? */
 
 	if (is_mercator || geo) {	/* One or the other flavor of geographic data */
-		/* Indirectlyl set up a plain Mercator projection for a spherical Earth with -Jm1i -R0/360/-lat/+lat, unless Cartesian data */
+		/* Indirectly set up a plain Mercator projection for a spherical Earth with -Jm1i -R0/360/-lat/+lat, unless Cartesian data */
+		double clon;	/* Determine a reasonable central meridian in steps of 90 */
+		clon = 90.0 * ((GMT->common.R.active[RSET]) ? rint (0.5 * (wesn[XLO] + wesn[XHI] / 90.0)) : rint (0.5 * (G->header->wesn[XLO] + G->header->wesn[XHI] / 90.0)));
+		wesn_m[XLO] = clon - 180.0;	wesn_m[XHI] = clon + 180.0;
 		GMT->current.setting.proj_ellipsoid = gmt_get_ellipsoid (GMT, "Sphere");
 		GMT->current.proj.units_pr_degree = true;
-		GMT->current.proj.pars[0] = 180.0;
+		GMT->current.proj.pars[0] = clon;
 		GMT->current.proj.pars[1] = 0.0;
 		GMT->current.proj.pars[2] = 1.0;
 		GMT->current.proj.projection = GMT->current.proj.projection_GMT = GMT_MERCATOR;
