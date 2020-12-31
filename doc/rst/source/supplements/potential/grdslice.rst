@@ -34,14 +34,16 @@ Synopsis
 Description
 -----------
 
-**grdslice** is used to determine local *peaks* in a 2-D grid.  To do so, it reads a binary 2-D
+**grdslice** is used to determine local *peaks* in a 2-D surface.  To do so, it reads a binary 2-D
 grid and contour-slices the surface using the selected constant contour interval,
-starting from the max grid value and moving down to lower and lower values.  As new contours are
+starting from the max grid value and moving down to lower and lower values.  As new closed contours are
 first encountered, their centers are considered the location of a new peak, and we trace the hierarchy of how
-each new slice belongs to groups of previously detected peaks by virtue of enclosing them.  Slice shapes
+each new slice belongs to groups of previously detected peaks by virtue of enclosing them.  Slice areal shapes
 are equated to ellipses and their best-fitting major and major axes and orientations are computed.
-Information are written to separate data files, as requested.  The primary output (to stdout) is a table
-with the vertical traces of peak centers.
+A rich set of information is written to separate data files, as requested via options.  The primary
+output (written to *stdout*) is a table with the vertical traces of peak centers per contour. Options
+are available to set limits on how small contour areas to consider and if we should eliminate closely-spaced
+peaks, for instance.
 
 Required Arguments
 ------------------
@@ -64,45 +66,58 @@ Optional Arguments
 .. _-A:
 
 **-A**\ *area*
-    Ignore contours whose areas are less than *area* in km^2 (or user units
-    for Cartesian grids) [retain all contours].
+    Skip contours whose areas are less than *area* in km^2 (or squared user units
+    for Cartesian grids) [retain all closed contours].
 
 .. _-D:
 
 **-D**\ *distance*
-    Examine the peak locations found and eliminate those that fall within *distance* km of another
-    peak with a larger amplitude [retain all peaks].
+    Examine the peak locations found and eliminate those that fall within *distance* km (or Cartesian units)
+    of another peak with a larger amplitude [retain all peaks].
 
 .. _-E:
 
 **-E**\ *slicefile*
-    Set the filename for the output of all slice polygons [no slice output].
+    Set the filename for the output of all slice polygons found [no slice output].  Each segment header
+    will list the contour area (via **-Z**), the contour level (via **-L**), the number of identified peaks
+    inside this contour (via **-N**), the parameters of the best-fitting ellipsoid (via **-S**\ *x/y/azim/major/minor/fit*),
+    and the *ID* of the foundation contour it belongs to (via **-I**). The *fit* is a measure between 0-100 of now
+    close the contour is to the best-fit ellipsoidal shale of the same area. Each segment header is followed by the
+    coordinates of the contour via *x y z* records, with *z* being the contour value.
 
 .. _-F:
 
 **-F**\ *foundationfile*
-    Set the filename for the output of all peak foundation polygons [no foundation output].
+    Set the filename for the output of all foundation polygons [no foundation output]. Each segment header
+    will list the contour area (via **-Z**), the contour level (via **-L**), the number of identified peaks
+    inside this contour (via **-N**), the parameters of the best-fitting ellipsoid (via **-S**\ *x/y/azim/major/minor/fit*),
+    and the *ID* of the foundation contour it belongs to (via **-I**). The *fit* is a measure between 0-100 of now
+    close the foundation contour is to the best-fit ellipsoidal shale of the same area. Each segment header is followed by the
+    coordinates of the contour via *x y z* records, with *z* being the contour value.
 
 .. _-I:
 
 **-I**\ *indexfile*
-    Set the filename for the output of all peak indices [no index output].
+    Set the filename for the output of all peak indices [no index output].  The format of this file is a set of
+    *x y *index* records for the peaks.
 
 .. _-L:
 
 **-L**\ *low/high*
-    Limit contour range: Only do the contour slicing within the specified range of contours [use he entire range].
+    Limit contour slicing range: Only do the contour slicing within the specified range of contours [use the entire range].
 
 .. _-Q:
 
 **-Q**\ *divisor*
     The location and amplitude of each peak is refined by a grid search on a sub-pixel lattice inside the closed
-    uppermost contour.  The *divisor* is used to subdivide the grid intervals by that factor [8].
+    uppermost contour.  The *divisor* is used to subdivide the grid intervals by that factor.  A higher value yields
+    a more precise result.  **Note**: The interpolated grid value at the sub-pixel locations depends on the interpolation
+    selected via **-n** [8].
 
 .. _-S:
 
 **-S**\ *smoothfactor*
-    Resample the contour lines at roughly every (gridbox_size/*smoothfactor*) interval [no resampling].
+    Resample all contour lines at roughly every (*gridbox_size*/*smoothfactor*) interval [no along-contour resampling].
 
 .. _-T:
 
@@ -113,9 +128,9 @@ Optional Arguments
 .. _-Z:
 
 **-Z**\ [**+s**\ *factor*][**+o**\ *shift*]
-    Use to subtract *shift* from the data and multiply the results by
-    *factor* before contouring starts [1/0]. (Numbers in **-C**, **-L**
-    and **-T** refer to values *after* this scaling has occurred.)
+    Subtract *shift* from the data grid and multiply the results by
+    *factor* before contouring starts [1/0]. (Values in **-C**, **-L**
+    and **-T** refer to values *after* any scaling has occurred.)
 
 .. |Add_-f| unicode:: 0x20 .. just an invisible code
 .. include:: ../../explain_-f.rst_
@@ -130,9 +145,9 @@ Optional Arguments
 Examples
 --------
 
-To slice the grid gravity_smts.grd every 0.1 mGal and write all results, try::
+To slice the grid gravity_smts.grd every 0.1 mGal and write all four table results, try::
 
-    grdslice gravity_smts.grd -C0.1 -Dindeces.txt -Eslices.txt -Ffoundations.txt -V > centers.txt
+    grdslice gravity_smts.grd -C0.1 -Iindeces.txt -Eslices.txt -Ffoundations.txt -V > centers.txt
 
 References
 ----------

@@ -105,6 +105,7 @@ struct GRDSLICE_SLICE {	/* Hold each contour slice information */
 	int n;				/* Number of points in this slice polygon */
 	int id;				/* Unique ID number */
 	int shared;			/* Number of peaks that share this slice */
+	int F_id;			/* Id of foundation this slice belongs to */
 	double cval;			/* Contour of this slice */
 	double z;			/* Z-value of this slice, initially at peak (so may be > cval) */
 	double *x, *y;			/* The array of Mercator or Cartesian (x,y) coordinates */
@@ -290,7 +291,7 @@ GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double
 	unsigned int i, j, nx, ny;
 	double area, xmin, xmax, ymin, ymax, zz, *xx = NULL, *yy = NULL;
 	struct GMT_DATASEGMENT *P = NULL;
-	struct GMT_GRID_HEADER_HIDDEN *HH = gmt_get_H_hidden (G->header);
+	struct GMT_GRID_HEADER_HIDDEN *HH = NULL;
 
 	if (!refine) {	/* Just get area and centroid */
 		area = gmt_centroid_area (GMT, x, y, n, geo, pos);	/* First get the area only */
@@ -303,8 +304,9 @@ GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double
 		return area;
 	}
 
-	/* Get here if we need to refine the peak location. (x,y) must be in same coordinate system as G */
+	/* Get here if we need to refine the peak location. (x,y) are in same coordinate system as grid G */
 
+	HH = gmt_get_H_hidden (G->header);
 	P = GMT_Alloc_Segment (GMT->parent, GMT_NO_STRINGS, 0, 2, NULL, NULL);
 	P->data[GMT_X] = x;
 	P->data[GMT_Y] = y;
@@ -332,6 +334,7 @@ GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double
 			}
 		}
 	}
+	/* Blank the P arrays and wipe memory */
 	P->data[GMT_X] = P->data[GMT_Y] = NULL;
 	gmt_free_segment (GMT, &P);
 	gmt_M_free (GMT, xx);
@@ -390,18 +393,17 @@ GMT_LOCAL void grdslice_fit_ellipse (struct GMT_CTRL *GMT, double *dx, double *d
 #define Return(code) {Free_Ctrl (GMT, Ctrl); gmt_end_module (GMT, GMT_cpy); bailout (code);}
 
 EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
-	bool begin = true, inside, is_mercator = false, dump;
-	bool *skip = NULL;
+	bool begin = true, inside, is_mercator = false, dump, has_foundation, *skip = NULL;
 
 	int error, cs;
 
-	unsigned int c, n_contours, n_edges, slc, n_inside, n_peaks = 0, n_slices = 0, n_foundations, index, n_skipped = 0;
+	unsigned int c, n_contours, n_edges, slc, n_inside, n_peaks = 0, n_slices = 0, n_foundations, index, n_skipped = 0, F_id;
 	unsigned int geo = 0, *np = NULL, *edge = NULL;
 
 	uint64_t ij, n, i, n_alloc = GMT_CHUNK, row, seg, dim[4] = {1, 1, 0, 0};
 	int64_t ns;
 
-	char header[GMT_LEN256] = {""}, *xname[2] = {"x", "geo"}, *yname[2] = {"y", "lat"};
+	char header[GMT_LEN256] = {""}, *xname[2] = {"x", "lon"}, *yname[2] = {"y", "lat"};
 
 	double aspect, cval, min, max, small, scale = 1.0, area, pos[3], *x_orig = NULL, *y_orig = NULL;
 	double small_x, small_y, lon, lat = 0.0, min_area, max_area, merc_x0 = 0.0, merc_y0 = 0.0;
@@ -541,7 +543,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			if (G->data[ij] == 0.0) G->data[ij] += (gmt_grdfloat)small;	  /* There will be no actual zero-values, just -ve and +ve values */
 		}
 
-		/* Trace contours and skip open contours */
+		/* Trace contours and skip all open contours */
 		begin = true;
 		while ((ns = gmt_contours (GMT, G, Ctrl->S.value, GMT->current.setting.interpolant, 0, edge, &begin, &x, &y)) > 0) {
 			n = (uint64_t)ns;
@@ -557,17 +559,10 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			this_slice    = gmt_M_memory (GMT, NULL, 1, struct GRDSLICE_SLICE);
 			this_slice->x = gmt_M_memory (GMT, NULL, n, double);
 			this_slice->y = gmt_M_memory (GMT, NULL, n, double);
-			
-			/* Get information about this slice and store it in structure as projected (or Cartesian) coordinates */
-			
-			this_slice->xmin = this_slice->ymin = +DBL_MAX;
-			this_slice->xmax = this_slice->ymax = -DBL_MAX;
-			this_slice->n = n;
-			this_slice->z = cval;
 
+			
 			/* Get signed area and point of max grid value inside contour from geographic, Mercator, or Cartesian coordinates */
-			area = grdslice_centroid_area (GMT, x, y, n, this_slice, G, geo, false, Ctrl->Q.factor, pos);
-			this_slice->cval = cval;
+			area = grdslice_centroid_area (GMT, x, y, n, NULL, NULL, geo, false, 0.0, pos);
 
 			/* Below we want all coordinates to be projected Mercator (or the original Cartesian) except x_mean/y_mean which will be in degrees (unless Cartesian) */
 
@@ -589,24 +584,29 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 				gmt_xy_to_geo (GMT, &this_slice->x_mean, &this_slice->y_mean, pos[GMT_X] + merc_x0, pos[GMT_Y] + merc_y0);
 				scale = GMT->current.proj.DIST_KM_PR_DEG * cosd (this_slice->y_mean);	/* Needed to convert Mercator areas to km below */
 			}
-			else {	/* No conversions */
+			else {	/* Cartesian: no conversions */
 				gmt_M_memcpy (this_slice->x, x, n, double);	/* Copy polygon Cartesian coordinates to this array as well */
 				gmt_M_memcpy (this_slice->y, y, n, double);
 				this_slice->x_mean = pos[GMT_X]; this_slice->y_mean = pos[GMT_Y];
 			}
 
 			/* Here, everything is Mercator or Cartesian coordinates */
+			/* Get information about this slice and store it in structure as projected (or Cartesian) coordinates */
+
+			this_slice->xmin = this_slice->ymin = +DBL_MAX;
+			this_slice->xmax = this_slice->ymax = -DBL_MAX;
+			this_slice->n = n;
+			this_slice->z = this_slice->cval = cval;
+			this_slice->area = area * (scale * scale);	/* Now in km^2 unless for Cartesian grids */
+
+			GMT_Report (API, GMT_MSG_DEBUG, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
+
 			for (i = 0; i < n; i++) {	/* Determine extreme projected coordinate values */
 				if (x[i] < this_slice->xmin) this_slice->xmin = this_slice->x[i];
 				if (x[i] > this_slice->xmax) this_slice->xmax = this_slice->x[i];
 				if (y[i] < this_slice->ymin) this_slice->ymin = this_slice->y[i];
 				if (y[i] > this_slice->ymax) this_slice->ymax = this_slice->y[i];
 			}
-
-			this_slice->area = area * (scale * scale);	/* Now in km^2 unless for Cartesian grids */
-
-			GMT_Report (API, GMT_MSG_DEBUG, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
-			
 
 			/* Find orientation of major/minor axes and aspect ratio from reduced, projected x,y coordinates */
 
@@ -645,7 +645,6 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 						poly->shared++;	/* Number of peaks sharing this slice */
 						n_inside++;
 					}
-
 					poly = poly->next;	/* Go to next polygon in the list of contours at the previous level */
 				}
 			}
@@ -705,8 +704,35 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		for (c = n_skipped = 0; c < n_peaks; c++)	/* Count skipped peaks */
 			if (skip[c]) n_skipped++;
 	}
+
+	/* Count slices and foundations */
+	np = gmt_M_memory (GMT, NULL, n_contours, unsigned int);	/* Store number of slices per peak */
+	for (c = n_slices = n_foundations = 0; c < n_contours; c++) {	/* For each peak */
+		poly = slice[c];		/* First contour polygon at this contour level */
+		np[c] = 0;	/* Number of slices per level c */
+		while (poly) {			/* As long as there are more polygons at this level */
+			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) {
+				poly->F_id = n_foundations;
+				n_foundations++;
+			}
+			np[c]++;
+			poly = poly->next;	/* Go to next polygon in this contour list */
+		}
+		n_slices += np[c];		/* Total number of slices found so far */
+	}
+
 	GMT_Report (API, GMT_MSG_INFORMATION, "Peaks found: %d\n", n_peaks);
 	if (n_skipped) GMT_Report (API, GMT_MSG_INFORMATION, "Peaks eliminated due to -D minimum separation: %d\n", n_skipped);
+	GMT_Report (API, GMT_MSG_INFORMATION, "Slices: %d\n", n_slices);
+	if (n_foundations == 0) {	/* Found nothing to write home about */
+		if (Ctrl->F.active)
+			GMT_Report (API, GMT_MSG_WARNING, "Option -F: No peak foundations detected despite -T being set\n");
+		if (Ctrl->I.active)
+			GMT_Report (API, GMT_MSG_WARNING, "Option -I: No peak indices detected despite -T being set\n");
+		Ctrl->F.active = Ctrl->I.active = false;	/* To prevent any attempt to write nothing below */
+	}
+	else
+		GMT_Report (API, GMT_MSG_INFORMATION, "Indices/Foundations: %d\n", n_foundations);
 	if (geo) gmt_set_geographic (GMT, GMT_OUT);	/* We wish to write geographic coordinates */
 	gmt_set_tableheader (GMT, GMT_OUT, true);
 
@@ -715,20 +741,28 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	if ((Center = GMT_Create_Data (API, GMT_IS_DATASET, GMT_IS_LINE, 0, dim, NULL, NULL, 0, 0, NULL)) == NULL) {
 		Return (API->error);
 	}
-	np = gmt_M_memory (GMT, NULL, n_peaks, unsigned int);	/* Store number of slices per peak */
-	for (c = seg = n_skipped = n_slices = n_foundations = 0; c < n_peaks; c++) {	/* For each peak */
+	for (c = seg = 0; c < n_peaks; c++) {	/* For each peak */
 		if (Ctrl->D.active && skip[c])	continue;	/* Skipped peak */
 		poly = peak[c]->start;		/* First contour polygon originating form this peak */
 		row = 0;
+		has_foundation = false;
 		while (poly) {			/* As long as there are more polygons at this level */
-			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) n_foundations++;
+			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) {
+				F_id = poly->F_id;
+				has_foundation = true;
+			}
 			row++;
 			poly = poly->down;		/* Go to next polygon in this contour list */
 		}
-		np[c] = row;	/* Number of slices per peak */
-		n_slices += np[c];	/* Total number of slices found so far */
+		if (has_foundation) {
+			poly = peak[c]->start;		/* First contour polygon originating form this peak */
+			while (poly) {			/* As long as there are more polygons at this level */
+				poly->F_id = F_id;
+				poly = poly->down;	/* Go to next polygon above in this contour list */
+			}
+		}
 		sprintf (header, "-Z%g -L%d", peak[c]->cval, peak[c]->id);
-		S = GMT_Alloc_Segment (API, GMT_NO_STRINGS, np[c], Center->n_columns, header, Center->table[0]->segment[seg]);
+		S = GMT_Alloc_Segment (API, GMT_NO_STRINGS, row, Center->n_columns, header, Center->table[0]->segment[seg]);
 		poly = peak[c]->start;		/* Back to first contour again */
 		row = 0;
 		while (poly) {			/* As long as there are more polygons at this level. Format: x y z id area major minor azimuth fit */
@@ -740,7 +774,6 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 		}
 		seg++;
 	}
-	GMT_Report (API, GMT_MSG_INFORMATION, "Slices: %d\n", n_slices);
 	sprintf (header, "%s\t%s\tz\tid\tarea\tmajor\tminor\tazimuth\tfit", xname[is_mercator], yname[is_mercator]);
 	if (GMT_Set_Comment (API, GMT_IS_DATASET, GMT_COMMENT_IS_COLNAMES, header, Center)) {	/* Not working yet, gives command line instead */
 		Return (API->error);
@@ -753,29 +786,8 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 	else
 		GMT_Report (API, GMT_MSG_INFORMATION, "%d centers written to stdout\n", seg);
 
-	/* Count slices and indices/foundations */
-	for (c = n_slices = n_foundations = 0; c < n_contours; c++) {	/* For each peak */
-		poly = slice[c];		/* First contour polygon at this contour level */
-		np[c] = 0;	/* Number of slices per peak */
-		while (poly) {			/* As long as there are more polygons at this level */
-			if (Ctrl->T.active && doubleAlmostEqualZero (poly->z, Ctrl->T.cutoff) && poly->area >= Ctrl->A.cutoff) n_foundations++;
-			np[c]++;
-			poly = poly->next;	/* Go to next polygon in this contour list */
-		}
-		n_slices += np[c];		/* Total number of slices found so far */
-	}
-
-	if (n_foundations == 0) {	/* Found nothing to write home about */
-		if (Ctrl->F.active)
-			GMT_Report (API, GMT_MSG_WARNING, "Option -F: No peak foundations detected despite -T being set\n");
-		if (Ctrl->I.active)
-			GMT_Report (API, GMT_MSG_WARNING, "Option -I: No peak indices detected despite -T being set\n");
-		Ctrl->F.active = Ctrl->I.active = false;	/* To prevent any attempt to write nothing below */
-	}
-	else
-		GMT_Report (API, GMT_MSG_INFORMATION, "Indices/Foundations: %d\n", n_foundations);
-
 	/* Optional outputs, if any */
+	GMT_Report (API, GMT_MSG_INFORMATION, "Slices: %d\n", n_slices);
 
 	if (Ctrl->E.active || Ctrl->F.active || Ctrl->I.active) {
 		if (Ctrl->E.active) {	/* Must write all slices to one table */
@@ -827,7 +839,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 					index++;
 				}
 				if (Ctrl->E.active) {	/* Write out all the polygon perimeters. Format: x y z  */
-					sprintf (header, "-Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g", poly->area, poly->cval, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit);
+					sprintf (header, "-Z%g -L%g -N%d -S%g/%g/%g/%g/%g/%g -I%d", poly->area, poly->cval, poly->shared, out[GMT_X], out[GMT_Y], poly->azimuth, poly->major, poly->minor, poly->fit, poly->F_id);
 					S = GMT_Alloc_Segment (API, GMT_NO_STRINGS, poly->n, Slice->n_columns, header, Slice->table[0]->segment[slc]);
 					for (row = 0; row < poly->n; row++) {
 						if (geo)	/* Get lon, lat */
