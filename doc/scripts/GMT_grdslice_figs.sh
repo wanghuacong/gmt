@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Make 5 illustrations used by grdslice documentation
 # Make a grid of synthetic seamounts for testing grdslice
-gmt grdseamount -R-0:30/0:30/-0:30/0:32 -I1m -Gsynth.grd -Cg -E -fg << EOF
-0		0		30	80	40	131
--0.3	-0.3	70	25	16	60
-0.3		0.3		50	25	25	60
--0.35	0.35	60	25	20	45
-0.35	-0.35	-30	25	15	47
-EOF
 gmt begin
-	gmt figure GMT_grdslice_view ps
+	gmt grdseamount -R-0:30/0:30/-0:30/0:32 -I1m -Gsynth.grd -Cg -E -fg <<- EOF
+	0		0		30	80	40	131
+	-0.3	-0.3	70	25	16	60
+	0.3		0.3		50	25	25	60
+	-0.35	0.35	60	25	20	45
+	0.35	-0.35	-30	25	15	47
+	EOF
 	gmt makecpt -Cjet -T5/130/5
+	gmt figure GMT_grdslice_view ps
 	gmt grdview synth.grd -JM12c -JZ3c -Qs -C -Wc0.5p -p155/25 -B -Bz -BWSneZ
 	gmt figure GMT_grdslice_contours ps
 	gmt grdcontour synth.grd -JM12c -A20+f10p+c5% -C10 -S8 -B -BWSrt -Gl-0:30/0:05/0:0/0.05,-0:22/0/-0:22/0:30,0:22/0/0:22/-0:30 -L10/130 -T+d8p/2p+l.. --MAP_FRAME_TYPE=plain
@@ -27,7 +27,6 @@ gmt begin
 		gmt convert synth_center.txt -Ef | gmt plot -Sc5p -Gred
 	gmt subplot end
 	gmt figure GMT_grdslice_connect ps
-	gmt makecpt -Cjet -T5/130/5
 	gmt plot3d synth_center.txt -R-0:30/0:30/-0:30/0:32/0/130 -JM12c -JZ3c -W2p -B -Bz -BWSneZ -p165/25
 	gmt grdview synth.grd -Qs -C -Wc0.5p -p -t50
 gmt end show
