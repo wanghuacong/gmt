@@ -344,49 +344,74 @@ GMT_LOCAL double grdslice_centroid_area (struct GMT_CTRL *GMT, double *x, double
 
 GMT_LOCAL void grdslice_fit_ellipse (struct GMT_CTRL *GMT, double *dx, double *dy, unsigned int n, struct GRDSLICE_SLICE *p, double *pos, double area) {
 	/* Find orientation of major/minor axes and aspect ratio from reduced, projected x,y coordinates */
-	double A[4], EigenValue[2], EigenVector[4], aspect, minor, major, sa, ca, cos_a, sin_a, xr, yr, r_fit, r, dr, a, rms, work1[2], work2[2];
+	double A[4] = {0.0, 0.0, 0.0, 0.0}, EigenValue[2], EigenVector[4], angle, aspect, f, g, cos_g, sin_g, xr, yr;
+	double minor, major, Sx = 0.0, Sy = 0.0, r_fit, r, dr, rms, work1[2], work2[2];
+	double *b = gmt_M_memory (GMT, NULL, n, double);
 	unsigned int M = 2, nrots, i;
 	struct GMTAPI_CTRL *API = GMT->parent;
 
-	A[0] = A[1] = A[2] = A[3] = 0.0;
+	/* Object is to find x, y, azimuth, major, minor axes based on counter in x, y.  This is 5 parameters in a nonlinear inversion.
+	 * Here w cheat a bit and do this:
+	 * 1) Use the centroid of x,y as the ellipse center - these are already computed in pos[].
+	 * 2) Use eigenvalue analysis to determine the azimuth of the ellipse
+	 * 3) Do a simple L2 fit to the contour points to determine the aspect ration major/minor
+	 * 4) Do another simple L2 fit to determine the radial scaling that gives the final major/minor values in the x,y system
+	 */
 	for (i = 0; i < n; i++) {	/* Build dot-product 2x2 matrix using Mercator or Cartesian coordinates */
 		dx[i] -= pos[GMT_X];	/* Compute deviations from the mean location */
 		dy[i] -= pos[GMT_Y];
 		A[0] += dx[i] * dx[i];	/* Add up the covariances */
 		A[1] += dx[i] * dy[i];
 		A[3] += dy[i] * dy[i];
+		b[i] = atan2 (dy[i], dx[i]) * R2D;	/* Compute angle from origin to each point */
 	} 
-	A[2] = A[1];	/* Symmetry */
+	A[2] = A[1];	/* Because of symmetry */
 	if (gmt_jacobi (GMT, A, M, M, EigenValue, EigenVector, work1, work2, &nrots)) {	/* Solve eigen-system A = EigenVector * EigenValue * EigenVector^T */
 		GMT_Report (API, GMT_MSG_WARNING, "Eigenvalue routine failed to converge in 50 sweeps.\n");
 	}
-	aspect = sqrt (EigenValue[0] / EigenValue[1]);	/* Major/minor aspect ratio */
-	p->azimuth = atan2 (EigenVector[1], EigenVector[0]) * R2D;	/* Actual, not azimuth yet - just angle CCW from horizontal */
-	sincosd (p->azimuth, &sa, &ca);
-	p->azimuth = 90.0 - p->azimuth;		/* Now it is a proper azimuth */
-	if (p->azimuth < 0.0) p->azimuth += 360.0;
+	angle = atan2 (EigenVector[1], EigenVector[0]) * R2D;	/* Actual, not azimuth yet - just angle CCW from horizontal */
+	p->azimuth = 90.0 - angle;		/* Now it is a proper azimuth */
+	if (p->azimuth <= -180.0) p->azimuth += 360.0;
+	if (p->azimuth > 180.0) p->azimuth -= 360.0;
 	
+	/* Fit model to dx, dy by minimizing dr^2 and solve for aspect ratio. We use the form
+	 * x' = major * cos(g) and y' = minor * sin(g), form E = (dx - x')^2 + (dy - y')^2 and solve dE/dmajor = 0 etc*/
+
+	for (i = 0; i < n; i++) {
+		b[i] -= angle;	/* Now b has angles from major axis */
+		sincosd (b[i], &sin_g, &cos_g);
+		Sx += dx[i] * cos_g;
+		Sy += dy[i] * sin_g;
+	}
+	aspect = Sx / Sy;
+
+	/* Given final aspect ratio and actual area we can solve for axes in km via A = major * minor * pi */
 	p->minor = sqrt (p->area / (aspect * M_PI));	/* Ellipse axes in km */
 	p->major = p->minor * aspect;
-	minor = sqrt (area / (aspect * M_PI));		/* Axes in map units */
+	minor = sqrt (area / (aspect * M_PI));		/* Axes in map units, to be scaled below */
 	major = minor * aspect;
-	
-	/* Determine a measure of fit by calculating 100.0 * (1 - rms(delta_r) / major) */
-	/* Note that dx[], dy[] are now in projected Mercator (or original Cartesian) coordinates relative to mean pos */
-	rms = 0.0;
-	for (i = 0; i < n; i++) {	/* For each point */
-		xr = dx[i] * ca - dy[i] * sa;	/* Rotate vector into eigen-system axes */
-		yr = dx[i] * sa + dy[i] * ca;
-		a = atan2 (yr, xr);		/* Angle of this vector in radians */
-		r = hypot (xr, yr);		/* Magnitude of vector */
-		sincos (a, &sin_a, &cos_a);
-		xr = major * cos_a;		/* Ellipse model prediction */
-		yr = minor * sin_a;
-		r_fit = hypot (xr, yr);		/* Model radius(angle */
-		dr = r - r_fit;			/* Misfit */
-		rms += dr * dr;
+
+	/* Find best L2 radial scale f for fitting dx, dy using E = (r_obs - f*r_fit)^2 and dE/df = 0 */
+	for (i = 0, Sx = Sy = 0.0; i < n; i++) {
+		sincosd (b[i], &sin_g, &cos_g);
+		r = hypot (dx[i], dy[i]);	/* radius to observed point  */
+		r_fit = major * minor / hypot (major * sin_g, minor * cos_g);	/* Predicted radius, but off by unknown factor f */
+		Sx += r * r_fit;
+		Sy += r_fit * r_fit;
+	}
+	f = Sx / Sy;	/* Scale that turns major and minor into the best-fit values for dx, dy */
+	major *= f;	minor *= f;
+
+	/* Finally compute a misfit value between observed contour and best-fit ellipse */
+	for (i = 0; i < n; i++) {
+		sincosd (b[i], &sin_g, &cos_g);
+		r = hypot (dx[i], dy[i]);		/* radius to observed point  */
+		r_fit = major * minor / hypot (major * sin_g, minor * cos_g);	/* Predicted radius, but off by factor f */
+		dr = r - r_fit;		/* Radial misfit */
+		rms += dr * dr;		/* Sum up the rms w.r.t. model */
 	}
 	p->fit = 100.0 * (1 - sqrt (rms / n) / major);	/* Our fit parameter */
+	gmt_M_free (GMT, b);
 }
 
 #define bailout(code) {gmt_M_free_options (mode); return (code);}
@@ -599,7 +624,7 @@ EXTERN_MSC int GMT_grdslice (void *V_API, int mode, void *args) {
 			this_slice->z = this_slice->cval = cval;
 			this_slice->area = area * (scale * scale);	/* Now in km^2 unless for Cartesian grids */
 
-			GMT_Report (API, GMT_MSG_DEBUG, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
+			GMT_Report (API, GMT_MSG_INFORMATION, "Area = %g with scale = %g for z = %g [lat = %g]\n", area, scale, this_slice->z, lat);
 
 			for (i = 0; i < n; i++) {	/* Determine extreme projected coordinate values */
 				if (x[i] < this_slice->xmin) this_slice->xmin = this_slice->x[i];
