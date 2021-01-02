@@ -145,9 +145,60 @@ Optional Arguments
 Examples
 --------
 
-To slice the grid gravity_smts.grd every 0.1 mGal and write all four table results, try::
+We illustrate a typical workflow by using a synthetic data set with five peaks reflecting
+elliptical Gaussian shapes created by::
 
-    grdslice gravity_smts.grd -C0.1 -Iindeces.txt -Eslices.txt -Ffoundations.txt -V > centers.txt
+    gmt grdseamount -R-0:30/0:30/-0:30/0:32 -I1m -Gsynth.grd -Cg -E -fg <- EOF
+    0       0       30  80  40  131
+    -0.3    -0.3    70  25  16  60
+    0.3     0.3     50  25  25  60
+    -0.35   0.35    60  25  20  45
+    0.35    -0.35   -30 25  15  47
+    EOF
+
+The synthetic grid is visualized via :doc:`grdview </grdview>` below:
+
+.. figure:: /_images/GMT_grdslice_view.*
+   :width: 500 px
+   :align: center
+
+   Three-dimensional view of a cluster of five peaks, two which are isolated and three which
+   are part of an overlapping cluster.
+
+We can run :doc:`grdcontour </grdcontour>` to visualize what the data looks like in map-view:
+
+.. figure:: /_images/GMT_grdslice_contours.*
+   :width: 400 px
+   :align: center
+
+   The contour map reveals in 10-unit increments what the shapes look like.  For this quick
+   analysis we decide to use a 10-unit interval and use *z = 10* as the foundation contour.
+
+To determine the centers, slices, foundations and index files for this data we try::
+
+    gmt grdslice synth.grd -C10 -Isynth_index.txt -Esynth_slice.txt -Fsynth_foundation.txt -T10 -L10/130 -A5 -nl -Q8 -S8 > synth_center.txt
+
+The foundations, indices, slices and best-fitting ellipses are then presented graphically below:
+
+.. figure:: /_images/GMT_grdslice_products.*
+   :width: 750 px
+   :align: center
+
+   (left) We paint the three foundations and label them with the index numbers. (middle)
+   All the contour slices are reproduced and we plot the five peaks that were identified.
+   (right) Each contour is approximated by an ellipse whose parameters are used to make
+   this plot.
+
+Finally, one can use the contour centers to visualize how these peaks might be related
+hierarchically:
+
+.. figure:: /_images/GMT_grdslice_connect.*
+   :width: 500 px
+   :align: center
+
+   We attempt to show the 3-D lines connecting the slice centers as the start at each
+   peak but then merge as peaks start to share common contours, all the way down to
+   the foundation contour.
 
 References
 ----------
