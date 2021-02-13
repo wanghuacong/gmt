@@ -33,7 +33,6 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
-        <script src="_static/language_data.js"></script>
         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
@@ -42,7 +41,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="surface" href="surface.html" />
-    <link rel="prev" title="splitxyz" href="splitxyz.html" />
+    <link rel="prev" title="sphtriangulate" href="sphtriangulate.html" />
 
 
   <!-- Point to the *latest* version switcher. This will allow the latest versions to appear on older documentation. -->
@@ -132,6 +131,7 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debugging GMT</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">GMT C API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="postscriptlight.html">PostScriptLight C API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="devdocs.html">Developer Documentation</a></li>
 </ul>
 
             
@@ -354,7 +354,8 @@ Append <strong>+l</strong> if annotated <em>y</em>-axes will have a label [none]
 for the entire subplot.
 Append <strong>+p</strong> to make all annotations axis-parallel [horizontal]; if not used you may have to set <strong>-C</strong> to secure
 extra space for long horizontal annotations.
-Append <strong>+w</strong> to draw horizontal and vertical lines between interior panels using selected pen [no lines].</p>
+Append <strong>+w</strong> to the <strong>-F</strong> argument to draw horizontal and vertical lines
+between interior panels using selected pen [no lines].</p>
 </dd>
 </dl>
 <dl class="simple" id="t">
@@ -387,10 +388,10 @@ any module-specific option (but not the GMT common options), then exit.</p>
 <h2>Synopsis (set mode)<a class="headerlink" href="#synopsis-set-mode" title="Permalink to this headline">¶</a></h2>
 <p><strong>gmt subplot set</strong> [ <em>row,col</em>|<em>index</em> ] [ <strong>-A</strong><em>fixedlabel</em>] [ <strong>-C</strong><em>side</em><em>clearance</em> ] [ <a class="reference internal" href="#v"><span> <strong>-V</strong></span></a></strong>[<em>level</em>] ]</p>
 <p>Before you start plotting you must first select the active subplot.
-<strong>Note</strong>: If any <strong>-J</strong> option is passed with <strong>?</strong> as scale or width when plotting subplots,
-then the dimensions of the map are automatically determined by the subplot size and your region.
+<strong>Note</strong>: If any <strong>-J</strong> option is passed <em>without</em> the scale or width when you first are plotting
+inside the subplot, then the scale of the map is automatically determined by the subplot size and your region.
 For Cartesian plots: If you want the scale to apply <em>equally</em> to both dimensions
-then you must specify <strong>-Jx</strong> [The default <strong>-JX</strong> will fill the subplot by using unequal scales].</p>
+then you must specify <strong>-Jx</strong> [The default projection of <strong>-JX</strong> will fill the subplot by using unequal scales].</p>
 </div>
 <div class="section" id="id1">
 <h2>Optional Arguments<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h2>
@@ -490,7 +491,7 @@ gmt end show
         <a href="surface.html" class="btn btn-neutral float-right" title="surface" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="splitxyz.html" class="btn btn-neutral float-left" title="splitxyz" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="sphtriangulate.html" class="btn btn-neutral float-left" title="sphtriangulate" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -500,9 +501,9 @@ gmt end show
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, The GMT Team.
+        &copy; Copyright 2021, The GMT Team.
       <span class="lastupdated">
-        Last updated on Dec 02, 2020.
+        Last updated on Feb 13, 2021.
       </span>
 
     </p>

@@ -33,7 +33,6 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
-        <script src="_static/language_data.js"></script>
         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
@@ -132,6 +131,7 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debugging GMT</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">GMT C API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="postscriptlight.html">PostScriptLight C API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="devdocs.html">Developer Documentation</a></li>
 </ul>
 
             
@@ -251,7 +251,7 @@ can be used to replace the hole values.</p>
 <dt><strong>-A</strong><em>mode</em>[<em>arg</em>]</dt><dd><p>Specify the hole-filling algorithm to use.  Choose from <strong>c</strong> for constant
 fill and append the constant value, <strong>n</strong> for nearest neighbor (and optionally
 append a search radius in pixels [default radius is <span class="math notranslate nohighlight">\(r^2 = \sqrt{X^2 + Y^2}\)</span>,
-where (<em>X,Y</em>) are the node dimensions of the grid], or
+where (<em>X,Y</em>) are the node dimensions of the grid]), or
 <em>s*</em> for bicubic spline [NOT IMPLEMENTED YET].</p>
 </dd>
 </dl>
@@ -375,9 +375,9 @@ nearest non-NaN neighbor, try</p>
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, The GMT Team.
+        &copy; Copyright 2021, The GMT Team.
       <span class="lastupdated">
-        Last updated on Dec 02, 2020.
+        Last updated on Feb 13, 2021.
       </span>
 
     </p>

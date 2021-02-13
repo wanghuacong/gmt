@@ -33,7 +33,6 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
-        <script src="_static/language_data.js"></script>
         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
@@ -132,6 +131,7 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debugging GMT</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">GMT C API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="postscriptlight.html">PostScriptLight C API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="devdocs.html">Developer Documentation</a></li>
 </ul>
 
             
@@ -278,7 +278,7 @@
 <tr class="row-odd"><td><p><strong>-h</strong>[<strong>i</strong>|<strong>o</strong>][<em>n</em>][<strong>+c</strong>][<strong>+d</strong>][<strong>+m</strong><em>segheader</em>][<strong>+r</strong><em>remark</em>][<strong>+t</strong><em>title</em>]</p></td>
 <td><p>ASCII [<em>I</em>|<em>O</em>] tables have header record[s] <a class="reference internal" href="gmt.html#h-full"><span class="std std-ref">(…)</span></a></p></td>
 </tr>
-<tr class="row-even"><td><p><strong>-i</strong><em>cols</em>[<strong>+l</strong>][<strong>+s</strong><em>scale</em>][<strong>+o</strong><em>offset</em>][,<em>…</em>][,<strong>t</strong>[<em>word</em>]]</p></td>
+<tr class="row-even"><td><p><strong>-i</strong><em>cols</em>[<strong>+l</strong>][<strong>+d</strong><em>divide</em>][<strong>+s</strong><em>scale</em>][<strong>+o</strong><em>offset</em>][,<em>…</em>][,<strong>t</strong>[<em>word</em>]]</p></td>
 <td><p>Selection of input columns <a class="reference internal" href="gmt.html#icols-full"><span class="std std-ref">(…)</span></a></p></td>
 </tr>
 <tr class="row-odd"><td><p><strong>-je</strong>|<strong>f</strong>|<strong>g</strong></p></td>
@@ -308,10 +308,13 @@
 <tr class="row-odd"><td><p><strong>-t</strong><em>transparency</em></p></td>
 <td><p>Set layer transparency <a class="reference internal" href="gmt.html#t-full"><span class="std std-ref">(…)</span></a></p></td>
 </tr>
-<tr class="row-even"><td><p><strong>-x</strong>[[-]<em>n</em>]</p></td>
+<tr class="row-even"><td><p><strong>-wy</strong>|<strong>a</strong>|<strong>w</strong>|<strong>d</strong>|<strong>h</strong>|<strong>m</strong>|<strong>s</strong>|<strong>c</strong><em>period</em>[/<em>phase</em>][<strong>+c</strong><em>col</em>]</p></td>
+<td><p>Convert selected coordinate to repeating cycles <a class="reference internal" href="gmt.html#w-full"><span class="std std-ref">(…)</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>-x</strong>[[-]<em>n</em>]</p></td>
 <td><p>Set number of cores in multi-threaded modules <a class="reference internal" href="gmt.html#core-full"><span class="std std-ref">(…)</span></a></p></td>
 </tr>
-<tr class="row-odd"><td><p><strong>-:</strong>[<strong>i</strong>|<strong>o</strong>]</p></td>
+<tr class="row-even"><td><p><strong>-:</strong>[<strong>i</strong>|<strong>o</strong>]</p></td>
 <td><p>Expect <em>y</em>/<em>x</em> input rather than <em>x</em>/<em>y</em> <a class="reference internal" href="gmt.html#colon-full"><span class="std std-ref">(…)</span></a></p></td>
 </tr>
 </tbody>
@@ -339,9 +342,9 @@
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, The GMT Team.
+        &copy; Copyright 2021, The GMT Team.
       <span class="lastupdated">
-        Last updated on Dec 02, 2020.
+        Last updated on Feb 13, 2021.
       </span>
 
     </p>

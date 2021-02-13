@@ -33,7 +33,6 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
-        <script src="_static/language_data.js"></script>
         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
@@ -132,6 +131,7 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debugging GMT</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">GMT C API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="postscriptlight.html">PostScriptLight C API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="devdocs.html">Developer Documentation</a></li>
 </ul>
 
             
@@ -243,8 +243,8 @@ canvas and restores the plot region and map projection that was in effect prior 
 <p>The <strong>begin</strong> directive of <strong>inset</strong> defines the dimension and placement of the inset canvas.  It
 records the current region and projection so that we may return to the initial
 plot environment when  the inset is completed.  The user may select any plot region
-and projection once plotting in the inset, but if the first command uses
-? as scale or width then we adjust the scale or width to fill the inset as best
+and projection once plotting in the inset, but if the first command uses a projection
+that leaves off the scale or width then we supply a scale or width to fill the inset as best
 as possible, given the inset size and margins (if selected).</p>
 </div>
 <div class="section" id="required-arguments">
@@ -285,7 +285,7 @@ rectangular borders instead, with a 6<strong>p</strong> corner radius. You can
 override this radius by appending another value. Finally, append
 <strong>+s</strong> to draw an offset background shaded region. Here, <em>dx</em>/<em>dy</em>
 indicates the shift relative to the foreground frame
-[4<strong>p</strong>/-4<strong>p</strong>] and <em>shade</em> sets the fill style to use for shading [gray50].</p>
+[4<strong>p</strong>/-4<strong>p</strong>] and <em>shade</em> changes the fill used for shading [gray50].</p>
 </dd>
 </dl>
 <dl class="simple" id="m">
@@ -343,7 +343,7 @@ any module-specific option (but not the GMT common options), then exits.</p>
 <div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>gmt begin inset pdf
   gmt basemap -R0/40/20/60 -JM6.5i -Bafg -B+glightgreen
   gmt inset begin -DjTR+w2.5i+o0.2i -F+gpink+p0.5p -M0.25i
-    gmt basemap -Rg -JA20/20/2i -Bafg
+    gmt basemap -Rg -JA20/20/ -Bafg
     gmt text -F+f18p+cTR+tINSET -Dj-0.15i -N
   gmt inset end
   gmt text -F+f18p+cBL+tMAP -Dj0.2i
@@ -385,9 +385,9 @@ gmt end
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, The GMT Team.
+        &copy; Copyright 2021, The GMT Team.
       <span class="lastupdated">
-        Last updated on Dec 02, 2020.
+        Last updated on Feb 13, 2021.
       </span>
 
     </p>

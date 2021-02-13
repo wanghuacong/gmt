@@ -33,7 +33,6 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
-        <script src="_static/language_data.js"></script>
         <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
@@ -132,6 +131,7 @@
 <li class="toctree-l1"><a class="reference internal" href="debug.html">Debugging GMT</a></li>
 <li class="toctree-l1"><a class="reference internal" href="api.html">GMT C API</a></li>
 <li class="toctree-l1"><a class="reference internal" href="postscriptlight.html">PostScriptLight C API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="devdocs.html">Developer Documentation</a></li>
 </ul>
 
             
@@ -352,7 +352,7 @@ If <strong>z</strong> is appended we use the z-unit from the grid file.</p>
 <dt><strong>+v</strong></dt><dd><p>Specifies curved labels following the contour [Default is straight
 labels].</p>
 </dd>
-<dt><strong>+w</strong></dt><dd><p>Specifies how many (<em>x</em>,<em>y</em>) points will be used to estimate
+<dt><strong>+w</strong><em>n</em></dt><dd><p>Specifies how many (<em>x</em>,<em>y</em>) points will be used to estimate
 label angles [automatic].</p>
 </dd>
 <dt><strong>+x</strong>[<em>first,last</em>]</dt><dd><p>Adds <em>first</em> and <em>last</em> to these two labels [,’] placed at either end of a quoted line.
@@ -577,7 +577,7 @@ file is applied to the contour annotations.  Select <strong>+c</strong> for both
 </dd>
 </dl>
 <dl class="simple">
-<dt><strong>-i</strong><em>cols</em>[<strong>+l</strong>][<strong>+s</strong><em>scale</em>][<strong>+o</strong><em>offset</em>][,<em>…</em>][,<strong>t</strong>[<em>word</em>]] <a class="reference internal" href="gmt.html#icols-full"><span class="std std-ref">(more …)</span></a></dt><dd><p>Select input columns and transformations (0 is first column, <strong>t</strong> is trailing text, append <em>word</em> to read one word only).</p>
+<dt><strong>-i</strong><em>cols</em>[<strong>+l</strong>][<strong>+d</strong><em>divide</em>][<strong>+s</strong><em>scale</em>][<strong>+o</strong><em>offset</em>][,<em>…</em>][,<strong>t</strong>[<em>word</em>]] <a class="reference internal" href="gmt.html#icols-full"><span class="std std-ref">(more …)</span></a></dt><dd><p>Select input columns and transformations (0 is first column, <strong>t</strong> is trailing text, append <em>word</em> to read one word only).</p>
 </dd>
 </dl>
 <dl class="simple">
@@ -715,9 +715,9 @@ to supply a legend size (i.e., length of a line symbol) via the <strong>+S</stro
   <div role="contentinfo">
     <p>
         
-        &copy; Copyright 2020, The GMT Team.
+        &copy; Copyright 2021, The GMT Team.
       <span class="lastupdated">
-        Last updated on Dec 02, 2020.
+        Last updated on Feb 13, 2021.
       </span>
 
     </p>
