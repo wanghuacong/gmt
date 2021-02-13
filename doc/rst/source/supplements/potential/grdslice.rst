@@ -165,7 +165,7 @@ The synthetic grid is visualized via :doc:`grdview </grdview>` below:
    Three-dimensional view of a cluster of five peaks, two which are isolated and three which
    are part of an overlapping cluster.
 
-We can run :doc:`grdcontour </grdcontour>` to visualize what the data looks like in map-view:
+We can run :doc:`grdcontour </grdcontour>` to visualize what the data look like in map-view:
 
 .. figure:: /_images/GMT_grdslice_contours.*
    :width: 400 px
